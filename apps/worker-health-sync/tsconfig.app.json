@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/worker-health-sync",
+    "rootDir": "src",
+    "tsBuildInfoFile": "../../dist/apps/worker-health-sync/tsconfig.app.tsbuildinfo",
+    "paths": {
+      "@blansole/shared": ["libs/shared/dist"],
+      "@blansole/shared/*": ["libs/shared/dist/*"],
+    },
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"],
+}

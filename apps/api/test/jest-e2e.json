@@ -1,0 +1,13 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleNameMapper": {
+    "^@blansole/shared$": "<rootDir>/libs/shared/src",
+    "^@blansole/shared/(.*)$": "<rootDir>/libs/shared/src/$1"
+  },
+  "rootDir": "../../../",
+  "testEnvironment": "node",
+  "testMatch": ["<rootDir>/apps/api/test/**/*.e2e-spec.ts"],
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  }
+}

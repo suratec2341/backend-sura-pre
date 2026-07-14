@@ -1,0 +1,795 @@
+// Blansole Database Schema
+// Source of truth: blansole-system-design.md §3
+// ⚠️  Migration หลักรันจากฝั่ง NestJS (Prisma) เท่านั้น
+//     ฝั่ง Python AI Worker อ่านตารางเหล่านี้ผ่าน SQLAlchemy read model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// §3.2 — User / Auth
+// ============================================================
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  status    String    @default("active") // active | suspended | deleted
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  profile               UserProfile?
+  authProviders         AuthProvider[]
+  healthNotes           UserHealthNote[]
+  goals                 UserGoal[]
+  settings              UserSetting?
+  notificationPrefs     NotificationPreference[]
+  consents              UserConsent[]
+  devices               UserDevice[]
+  sessions              ActivitySession[]
+  chatThreads           AiChatThread[]
+  riskAssessments       RiskAssessment[]
+  memoryFacts           UserMemoryFact[]
+  episodeSummaries      EpisodeSummary[]
+  percentileStats       UserPercentileStat[]
+  programAssignments    UserProgramAssignment[]
+  notifications         Notification[]
+  healthIntegrations    HealthIntegration[]
+  aiSummaries           AiSummary[]
+  aiInsights            AiInsight[]
+  aiRecommendations     AiRecommendation[]
+
+  @@map("users")
+}
+
+model AuthProvider {
+  id          String @id @default(uuid())
+  userId      String @map("user_id")
+  provider    String // google | facebook | apple
+  providerUid String @map("provider_uid")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@map("auth_providers")
+}
+
+model UserProfile {
+  userId              String   @id @map("user_id")
+  name                String?
+  age                 Int?
+  gender              String?
+  weightKg            Float?   @map("weight_kg")
+  heightCm            Float?   @map("height_cm")
+  activityLevel       String?  @map("activity_level")
+  exerciseFrequency   String?  @map("exercise_frequency")
+  sedentaryHoursPerDay Float?  @map("sedentary_hours_per_day")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model UserHealthNote {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  conditionNote String?  @map("condition_note")
+  painArea      String?  @map("pain_area")
+  reportedAt    DateTime @default(now()) @map("reported_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_health_notes")
+}
+
+model UserGoal {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  goalType    String    @map("goal_type")
+  targetValue Float?    @map("target_value")
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  status      String    @default("active")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_goals")
+}
+
+model UserSetting {
+  userId     String @id @map("user_id")
+  language   String @default("th")
+  darkMode   Boolean @default(false) @map("dark_mode")
+  unitSystem String  @default("metric") @map("unit_system")
+  timeFormat String  @default("24h") @map("time_format")
+  dateFormat String  @default("dd/MM/yyyy") @map("date_format")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model NotificationPreference {
+  id              String  @id @default(uuid())
+  userId          String  @map("user_id")
+  channel         String  // push | email
+  category        String
+  enabled         Boolean @default(true)
+  quietHoursStart String? @map("quiet_hours_start")
+  quietHoursEnd   String? @map("quiet_hours_end")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel, category])
+  @@map("notification_preferences")
+}
+
+model UserConsent {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  consentType String    @map("consent_type") // health_data_processing | ai_training | marketing
+  grantedAt   DateTime  @default(now()) @map("granted_at")
+  revokedAt   DateTime? @map("revoked_at")
+  version     String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_consents")
+}
+
+// ============================================================
+// §3.3 — Device
+// ============================================================
+
+model Device {
+  id              String @id @default(uuid())
+  deviceModel     String @unique @map("device_model")
+  hardwareVersion String @map("hardware_version")
+
+  userDevices      UserDevice[]
+  firmwareVersions FirmwareVersion[]
+
+  @@map("devices")
+}
+
+model UserDevice {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  deviceId      String    @map("device_id")
+  deviceSerial  String    @map("device_serial")
+  pairedAt      DateTime  @default(now()) @map("paired_at")
+  unpairedAt    DateTime? @map("unpaired_at")
+  autoReconnect Boolean   @default(true) @map("auto_reconnect")
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device       Device            @relation(fields: [deviceId], references: [id])
+  statusLogs   DeviceStatusLog[]
+  batteryLogs  DeviceBatteryLog[]
+  syncLogs     DeviceSyncLog[]
+  calibrations DeviceCalibration[]
+  sessions     ActivitySession[]
+
+  @@map("user_devices")
+}
+
+model DeviceStatusLog {
+  id              String   @id @default(uuid())
+  userDeviceId    String   @map("user_device_id")
+  sensorStatus    String?  @map("sensor_status")
+  bluetoothStatus String?  @map("bluetooth_status")
+  signalStrength  Int?     @map("signal_strength")
+  loggedAt        DateTime @default(now()) @map("logged_at")
+
+  userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_status_logs")
+}
+
+model DeviceBatteryLog {
+  id           String   @id @default(uuid())
+  userDeviceId String   @map("user_device_id")
+  batteryLeft  Int?     @map("battery_left")
+  batteryRight Int?     @map("battery_right")
+  loggedAt     DateTime @default(now()) @map("logged_at")
+
+  userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
+
+  // candidate for TimescaleDB hypertable
+  @@map("device_battery_logs")
+}
+
+model DeviceSyncLog {
+  id                String   @id @default(uuid())
+  userDeviceId      String   @map("user_device_id")
+  syncType          String   @map("sync_type")
+  stepsSynced       Int?     @map("steps_synced")
+  distanceSynced    Float?   @map("distance_synced")
+  pressureDataSynced Boolean? @map("pressure_data_synced")
+  status            String
+  syncedAt          DateTime @default(now()) @map("synced_at")
+
+  userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_sync_logs")
+}
+
+model FirmwareVersion {
+  id           String   @id @default(uuid())
+  deviceModel  String   @map("device_model")
+  version      String
+  releaseNotes String?  @map("release_notes")
+  releasedAt   DateTime @default(now()) @map("released_at")
+
+  device Device @relation(fields: [deviceModel], references: [deviceModel], onDelete: Cascade)
+
+  @@unique([deviceModel, version])
+  @@map("firmware_versions")
+}
+
+model DeviceCalibration {
+  id                   String   @id @default(uuid())
+  userDeviceId         String   @map("user_device_id")
+  footSize             Float?   @map("foot_size")
+  weightAtCalibrationKg Float?  @map("weight_at_calibration_kg")
+  baselinePressureMap  String?  @map("baseline_pressure_map") // JSON or storage URL
+  calibratedAt         DateTime @default(now()) @map("calibrated_at")
+
+  userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
+
+  @@map("device_calibrations")
+}
+
+// ============================================================
+// §3.4 — Session
+// ============================================================
+
+model ActivitySession {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  deviceId          String?   @map("device_id")
+  activityType      String    @map("activity_type")
+  startedAt         DateTime  @map("started_at")
+  endedAt           DateTime? @map("ended_at")
+  durationSec       Int?      @map("duration_sec")
+  status            String    @default("recording") // recording | processing | completed | failed
+  syncStatus        String    @default("synced") @map("sync_status") // synced | pending | conflict
+  clientSessionUuid String?   @unique @map("client_session_uuid")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userDevice   UserDevice?    @relation(fields: [deviceId], references: [id])
+  route        SessionRoute?
+  metrics      SessionMetric?
+  pressureMaps SessionPressureMap[]
+  pressureZones SessionPressureZone[]
+  gaitMetrics  SessionGaitMetric?
+  gaitPhases   SessionGaitPhase[]
+  alerts       SessionAlert[]
+  aiSummary    AiSummary?
+  aiInsights   AiInsight[]
+
+  @@index([userId, startedAt])
+  @@map("activity_sessions")
+}
+
+model SessionRoute {
+  id              String @id @default(uuid())
+  sessionId       String @unique @map("session_id")
+  routeStorageUrl String @map("route_storage_url")
+  checksum        String
+  pointsCount     Int    @map("points_count")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_routes")
+}
+
+model SessionMetric {
+  sessionId         String @id @map("session_id")
+  steps             Int?
+  distanceKm        Float? @map("distance_km")
+  calories          Float?
+  speedKmh          Float? @map("speed_kmh")
+  pace              Float?
+  cadence           Float?
+  groundContactMs   Float? @map("ground_contact_ms")
+  footLiftHeightCm  Float? @map("foot_lift_height_cm")
+  walkQualityScore  Float? @map("walk_quality_score")
+  balanceScore      Float? @map("balance_score")
+  algorithmVersion  String @map("algorithm_version")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_metrics")
+}
+
+model SessionPressureMap {
+  id               String   @id @default(uuid())
+  sessionId        String   @map("session_id")
+  storageUrl       String   @map("storage_url")
+  checksum         String
+  algorithmVersion String   @map("algorithm_version")
+  capturedAt       DateTime @map("captured_at")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_pressure_maps")
+}
+
+model SessionPressureZone {
+  id               String @id @default(uuid())
+  sessionId        String @map("session_id")
+  footSide         String @map("foot_side") // left | right
+  forefootPercent  Float  @map("forefoot_percent")
+  midfootPercent   Float  @map("midfoot_percent")
+  heelPercent      Float  @map("heel_percent")
+  maxPressure      Float  @map("max_pressure")
+  avgPressure      Float  @map("avg_pressure")
+  hotspotArea      String? @map("hotspot_area")
+  pressureLevel    String  @map("pressure_level")
+  algorithmVersion String  @map("algorithm_version")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_pressure_zones")
+}
+
+model SessionGaitMetric {
+  sessionId         String @id @map("session_id")
+  cadence           Float?
+  stepLength        Float? @map("step_length")
+  stepTime          Float? @map("step_time")
+  stanceTime        Float? @map("stance_time")
+  swingTime         Float? @map("swing_time")
+  doubleSupportTime Float? @map("double_support_time")
+  strideLength      Float? @map("stride_length")
+  gaitSpeed         Float? @map("gait_speed")
+  variabilityCv     Float? @map("variability_cv")
+  gaitScore         Float? @map("gait_score")
+  algorithmVersion  String @map("algorithm_version")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_gait_metrics")
+}
+
+model SessionGaitPhase {
+  id        String @id @default(uuid())
+  sessionId String @map("session_id")
+  phaseName String @map("phase_name") // heel_strike | loading_response | mid_stance | ...
+  startPct  Float  @map("start_pct")
+  endPct    Float  @map("end_pct")
+  footSide  String @map("foot_side")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_gait_phases")
+}
+
+model SessionAlert {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  alertType String   @map("alert_type")
+  severity  String   // info | warning | critical
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("session_alerts")
+}
+
+// ============================================================
+// §3.5 — Risk
+// ============================================================
+
+model RiskAssessment {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  assessmentType   String   @map("assessment_type") // fall_risk | pain_risk
+  scope            String   // single_session | rolling_7d | rolling_30d
+  sourceSessionId  String?  @map("source_session_id")
+  score            Float
+  riskLevel        String   @map("risk_level")
+  computedAt       DateTime @default(now()) @map("computed_at")
+  algorithmVersion String   @map("algorithm_version")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@map("risk_assessments")
+}
+
+// ============================================================
+// §3.6 — AI (+ Memory Architecture)
+// ============================================================
+
+model AiSummary {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  sessionId     String   @unique @map("session_id")
+  summaryText   String   @map("summary_text")
+  modelVersion  String   @map("model_version")
+  promptVersion String   @map("prompt_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("ai_summaries")
+}
+
+model AiInsight {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  sessionId     String?  @map("session_id")
+  insightText   String   @map("insight_text")
+  insightType   String   @map("insight_type")
+  modelVersion  String   @map("model_version")
+  promptVersion String   @map("prompt_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session ActivitySession? @relation(fields: [sessionId], references: [id])
+
+  @@map("ai_insights")
+}
+
+model AiChatThread {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  title      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  archivedAt DateTime? @map("archived_at")
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiChatMessage[]
+
+  @@map("ai_chat_threads")
+}
+
+model AiChatMessage {
+  id                 String   @id @default(uuid())
+  threadId           String   @map("thread_id")
+  role               String   // user | assistant
+  content            String
+  contextSnapshotRef String?  @map("context_snapshot_ref")
+  modelVersion       String?  @map("model_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  thread AiChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@map("ai_chat_messages")
+}
+
+model AiRecommendation {
+  id                 String   @id @default(uuid())
+  userId             String   @map("user_id")
+  sessionId          String?  @map("session_id")
+  recommendationText String   @map("recommendation_text")
+  category           String   // exercise | rest | posture
+  modelVersion       String   @map("model_version")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ai_recommendations")
+}
+
+// ⭐ Semantic memory — facts distilled from repeated episodes
+model UserMemoryFact {
+  id                    String    @id @default(uuid())
+  userId                String    @map("user_id")
+  factText              String    @map("fact_text")
+  factCategory          String    @map("fact_category") // pain_pattern | preference | constraint
+  confidence            Float     @default(0.5)
+  derivedFromEpisodeIds String[]  @map("derived_from_episode_ids")
+  isActive              Boolean   @default(true) @map("is_active")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  supersededAt          DateTime? @map("superseded_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_memory_facts")
+}
+
+// ⭐ Episodic memory — weekly/monthly summaries
+model EpisodeSummary {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  periodType       String   @map("period_type") // weekly | monthly
+  periodStart      DateTime @map("period_start")
+  periodEnd        DateTime @map("period_end")
+  summaryText      String   @map("summary_text")
+  keyMetricsJson   Json?    @map("key_metrics_json")
+  generatedAt      DateTime @default(now()) @map("generated_at")
+  algorithmVersion String   @map("algorithm_version")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("episode_summaries")
+}
+
+// ⭐ Cohort/shared memory — percentile stats (materialized view candidate)
+model UserPercentileStat {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  cohortKey      String   @map("cohort_key") // age_band + gender
+  metricName     String   @map("metric_name")
+  percentileRank Float    @map("percentile_rank")
+  computedAt     DateTime @default(now()) @map("computed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cohortKey, metricName])
+  @@map("user_percentile_stats")
+}
+
+// RAG documents — knowledge graph เบาๆ ผ่าน relatedConditionTags
+model RagDocument {
+  id                   String   @id @default(uuid())
+  title                String
+  category             String   // gait_knowledge | pressure_explain | guideline | faq | safety_rule
+  version              String
+  isActive             Boolean  @default(true) @map("is_active")
+  relatedConditionTags String[] @map("related_condition_tags")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  chunks RagChunk[]
+
+  @@map("rag_documents")
+}
+
+model RagChunk {
+  id         String @id @default(uuid())
+  documentId String @map("document_id")
+  chunkText  String @map("chunk_text")
+  chunkIndex Int    @map("chunk_index")
+
+  document  RagDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embedding RagEmbedding?
+
+  @@map("rag_chunks")
+}
+
+// Note: pgvector extension must be enabled manually:
+//   CREATE EXTENSION IF NOT EXISTS vector;
+// Prisma doesn't natively support vector type yet — use raw SQL or
+// @db.Unsupported("vector(1536)") for the embedding column.
+model RagEmbedding {
+  id                    String @id @default(uuid())
+  chunkId               String @unique @map("chunk_id")
+  // embedding          Unsupported("vector(1536)") — ต้องเพิ่มผ่าน raw migration
+  embeddingModelVersion String @map("embedding_model_version")
+
+  chunk RagChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@map("rag_embeddings")
+}
+
+// ============================================================
+// §3.7 — Content Library & Video Recommendation
+// ============================================================
+
+model ExerciseProgram {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  durationWeeks Int?      @map("duration_weeks")
+  difficulty    String?
+  status        String    @default("draft") // draft | in_review | published | archived
+  version       String    @default("1.0")
+  createdBy     String?   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  publishedAt   DateTime? @map("published_at")
+
+  videos              ExerciseVideo[]
+  tags                ProgramTag[]
+  recommendationRules ProgramRecommendationRule[]
+  assignments         UserProgramAssignment[]
+
+  @@map("exercise_programs")
+}
+
+model ExerciseVideo {
+  id              String    @id @default(uuid())
+  programId       String?   @map("program_id")
+  orderIndex      Int       @default(0) @map("order_index")
+  youtubeUrl      String    @map("youtube_url")
+  youtubeVideoId  String    @map("youtube_video_id")
+  sourceType      String    @default("own_channel") @map("source_type") // own_channel | external_licensed
+  title           String
+  aiDescription   String?   @map("ai_description") // ⭐ grounding text for AI — ห้ามเดาเพิ่ม
+  thumbnailUrl    String?   @map("thumbnail_url") // auto-fetch from oEmbed
+  durationSec     Int?      @map("duration_sec")  // auto-fetch from oEmbed
+  language        String    @default("th")
+  status          String    @default("draft") // draft | in_review | published | archived
+  linkStatus      String    @default("active") @map("link_status") // active | broken | private | removed
+  lastLinkCheckedAt DateTime? @map("last_link_checked_at")
+  createdBy       String?   @map("created_by")
+  reviewedBy      String?   @map("reviewed_by")
+  publishedAt     DateTime? @map("published_at")
+
+  program ExerciseProgram? @relation(fields: [programId], references: [id])
+
+  @@map("exercise_videos")
+}
+
+model ContentTag {
+  id       String @id @default(uuid())
+  tagName  String @unique @map("tag_name")
+  category String // condition | body_part | risk_level | goal
+
+  programs ProgramTag[]
+
+  @@map("content_tags")
+}
+
+model ProgramTag {
+  programId String @map("program_id")
+  tagId     String @map("tag_id")
+
+  program ExerciseProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  tag     ContentTag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([programId, tagId])
+  @@map("program_tags")
+}
+
+model ProgramRecommendationRule {
+  id              String @id @default(uuid())
+  conditionTag    String @map("condition_tag")
+  severityMin     Float? @map("severity_min")
+  severityMax     Float? @map("severity_max")
+  targetProgramId String @map("target_program_id")
+  priority        Int    @default(0)
+
+  program ExerciseProgram @relation(fields: [targetProgramId], references: [id], onDelete: Cascade)
+
+  @@map("program_recommendation_rules")
+}
+
+model UserProgramAssignment {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  programId    String   @map("program_id")
+  source       String   // ai_chat | manual | admin
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+  status       String   @default("in_progress") // in_progress | completed | skipped
+  userFeedback String?  @map("user_feedback")
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program ExerciseProgram @relation(fields: [programId], references: [id])
+
+  @@map("user_program_assignments")
+}
+
+model ContentReviewLog {
+  id          String   @id @default(uuid())
+  contentId   String   @map("content_id")
+  contentType String   @map("content_type") // program | video
+  reviewerId  String   @map("reviewer_id")
+  action      String   // approved | rejected | unpublished
+  note        String?
+  reviewedAt  DateTime @default(now()) @map("reviewed_at")
+
+  @@index([contentType, contentId])
+  @@map("content_review_logs")
+}
+
+// ============================================================
+// §3.8 — Notification
+// ============================================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  category  String
+  title     String
+  body      String
+  status    String   @default("pending") // pending | sent | read
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveryLogs NotificationDeliveryLog[]
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationEvent {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  eventType   String   @map("event_type")
+  payloadJson Json?    @map("payload_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("notification_events")
+}
+
+model NotificationRule {
+  id              String @id @default(uuid())
+  eventType       String @map("event_type")
+  conditionJson   Json?  @map("condition_json")
+  cooldownMinutes Int    @map("cooldown_minutes")
+
+  @@map("notification_rules")
+}
+
+model NotificationDeliveryLog {
+  id                String   @id @default(uuid())
+  notificationId    String   @map("notification_id")
+  channel           String
+  providerMessageId String?  @map("provider_message_id")
+  status            String
+  deliveredAt       DateTime? @map("delivered_at")
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@map("notification_delivery_logs")
+}
+
+// ============================================================
+// §3.9 — Health Integration
+// ============================================================
+
+model HealthIntegration {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  provider    String    // apple_health | health_connect
+  status      String    @default("connected")
+  connectedAt DateTime  @default(now()) @map("connected_at")
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncLogs HealthSyncLog[]
+
+  @@map("health_integrations")
+}
+
+model HealthSyncLog {
+  id             String    @id @default(uuid())
+  integrationId  String    @map("integration_id")
+  syncStartedAt  DateTime  @map("sync_started_at")
+  syncFinishedAt DateTime? @map("sync_finished_at")
+  status         String
+  recordsSynced  Int?      @map("records_synced")
+
+  integration HealthIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@map("health_sync_logs")
+}
+
+model HealthDailySummary {
+  id           String @id @default(uuid())
+  userId       String @map("user_id")
+  date         DateTime @db.Date
+  steps        Int?
+  distanceKm   Float? @map("distance_km")
+  calories     Float?
+  heartRateAvg Float? @map("heart_rate_avg")
+
+  @@unique([userId, date])
+  @@map("health_daily_summaries")
+}
+
+// ============================================================
+// Admin audit log
+// ============================================================
+
+model AdminAccessLog {
+  id        String   @id @default(uuid())
+  staffId   String   @map("staff_id")
+  action    String
+  targetId  String?  @map("target_id")
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admin_access_logs")
+}

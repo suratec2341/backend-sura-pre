@@ -1,0 +1,14 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "apps/worker-ai/src",
+    "libs/python/src"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "node_modules",
+    "dist"
+  ]
+}

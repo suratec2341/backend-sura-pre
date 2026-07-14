@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/api/src",
+  "monorepo": true,
+  "root": "apps/api",
+  "compilerOptions": {
+    "webpack": false,
+    "tsConfigPath": "apps/api/tsconfig.app.json",
+    "assets": [],
+    "watchAssets": false
+  },
+  "projects": {
+    "api": {
+      "type": "application",
+      "root": "apps/api",
+      "entryFile": "main",
+      "sourceRoot": "apps/api/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api/tsconfig.app.json"
+      }
+    },
+    "worker-session": {
+      "type": "application",
+      "root": "apps/worker-session",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker-session/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker-session/tsconfig.app.json"
+      }
+    },
+    "worker-notification": {
+      "type": "application",
+      "root": "apps/worker-notification",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker-notification/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker-notification/tsconfig.app.json"
+      }
+    },
+    "worker-health-sync": {
+      "type": "application",
+      "root": "apps/worker-health-sync",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker-health-sync/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker-health-sync/tsconfig.app.json"
+      }
+    },
+    "worker-link-checker": {
+      "type": "application",
+      "root": "apps/worker-link-checker",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker-link-checker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker-link-checker/tsconfig.app.json"
+      }
+    },
+    "worker-episode-summary": {
+      "type": "application",
+      "root": "apps/worker-episode-summary",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker-episode-summary/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker-episode-summary/tsconfig.app.json"
+      }
+    },
+    "shared": {
+      "type": "library",
+      "root": "libs/shared",
+      "entryFile": "index",
+      "sourceRoot": "libs/shared/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/shared/tsconfig.lib.json"
+      }
+    }
+  }
+}

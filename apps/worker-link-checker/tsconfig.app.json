@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/worker-link-checker",
+    "rootDir": "src",
+    "tsBuildInfoFile": "../../dist/apps/worker-link-checker/tsconfig.app.tsbuildinfo",
+    "paths": {
+      "@blansole/shared": ["libs/shared/dist"],
+      "@blansole/shared/*": ["libs/shared/dist/*"],
+    },
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"],
+}
