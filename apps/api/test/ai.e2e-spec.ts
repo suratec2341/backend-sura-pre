@@ -7,7 +7,7 @@ jest.mock('sanitize-html', () => jest.fn((input) => input));
 
 import { AppModule } from '../src/app.module';
 import { AiService } from '../src/modules/ai/ai.service';
-import { API_PREFIX } from '@blansole/shared';
+import { API_PREFIX, PrismaService } from '@blansole/shared';
 
 describe('AI Controller (e2e)', () => {
   let app: INestApplication;
@@ -18,6 +18,12 @@ describe('AI Controller (e2e)', () => {
     dispatchChatMessageTask: jest.fn().mockResolvedValue('mock-task-id-456'),
   };
 
+  // Mock PrismaService to prevent it from connecting to a database during tests
+  const mockPrismaService = {
+    $connect: jest.fn().mockResolvedValue(true),
+    $disconnect: jest.fn().mockResolvedValue(true),
+  };
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -25,6 +31,9 @@ describe('AI Controller (e2e)', () => {
     // Override the real AiService with our mock so we don't connect to Celery during tests
     .overrideProvider(AiService)
     .useValue(mockAiService)
+    // Override PrismaService to avoid needing DATABASE_URL in .env
+    .overrideProvider(PrismaService)
+    .useValue(mockPrismaService)
     .compile();
 
     app = moduleFixture.createNestApplication();
