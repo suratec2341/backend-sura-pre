@@ -18,11 +18,11 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           echo "Building and deploying application..."
-          # Pull latest images and build local ones
-          docker compose -f infra/docker-compose.yml build --no-cache
+          # Pull latest images and build local ones with sudo to avoid permission issues
+          sudo docker compose -f infra/docker-compose.yml build --no-cache
           # Restart services safely
-          docker compose -f infra/docker-compose.yml up -d
+          sudo docker compose -f infra/docker-compose.yml up -d
           
           # Clean up dangling images to save space on VM
-          docker image prune -f
+          sudo docker image prune -f
           echo "Deployment successful."
