@@ -14,6 +14,7 @@ services:
       - api
 
   api:
+    image: ghcr.io/suratec2341/blansole-api:latest
     build:
       context: ..
       dockerfile: apps/api/Dockerfile
@@ -78,6 +79,7 @@ services:
         condition: service_started
 
   worker-session:
+    image: ghcr.io/suratec2341/blansole-worker-session:latest
     build:
       context: ..
       dockerfile: apps/worker-session/Dockerfile
@@ -103,6 +105,7 @@ services:
         condition: service_started
 
   worker-ai:
+    image: ghcr.io/suratec2341/blansole-worker-ai:latest
     build:
       context: ..
       dockerfile: apps/worker-ai/Dockerfile
@@ -124,6 +127,7 @@ services:
         condition: service_healthy
 
   worker-notification:
+    image: ghcr.io/suratec2341/blansole-worker-notification:latest
     build:
       context: ..
       dockerfile: apps/worker-notification/Dockerfile
@@ -149,6 +153,7 @@ services:
         condition: service_healthy
 
   worker-health-sync:
+    image: ghcr.io/suratec2341/blansole-worker-health-sync:latest
     build:
       context: ..
       dockerfile: apps/worker-health-sync/Dockerfile
@@ -166,6 +171,7 @@ services:
         condition: service_healthy
 
   worker-link-checker:
+    image: ghcr.io/suratec2341/blansole-worker-link-checker:latest
     build:
       context: ..
       dockerfile: apps/worker-link-checker/Dockerfile
@@ -185,6 +191,7 @@ services:
         condition: service_healthy
 
   worker-episode-summary:
+    image: ghcr.io/suratec2341/blansole-worker-episode-summary:latest
     build:
       context: ..
       dockerfile: apps/worker-episode-summary/Dockerfile

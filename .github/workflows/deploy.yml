@@ -1,4 +1,4 @@
-name: Deploy to Private VM
+name: Build and Deploy to Private VM
 
 on:
   push:
@@ -7,26 +7,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: self-hosted
+  build-and-push:
+    name: Build Images on GitHub
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Using Docker Compose to spin up the environment
-      - name: Deploy with Docker Compose
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker images
         run: |
-          echo "Building and deploying application..."
-          # Disable BuildKit to workaround LXC permission issues on Hostinger
-          export DOCKER_BUILDKIT=0
-          export COMPOSE_DOCKER_CLI_BUILD=0
+          echo "Building images using GitHub servers..."
+          docker compose -f infra/docker-compose.yml build
           
-          # Pull latest images and build local ones with sudo
-          sudo -E docker compose -f infra/docker-compose.yml build
-          # Restart services safely
-          sudo -E docker compose -f infra/docker-compose.yml up -d
+          echo "Pushing images to GHCR..."
+          docker compose -f infra/docker-compose.yml push
+
+  deploy:
+    name: Deploy on Private VM
+    needs: build-and-push
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        
+      - name: Pull and Deploy with Docker Compose
+        run: |
+          echo "Pulling pre-built images from GHCR..."
+          sudo docker compose -f infra/docker-compose.yml pull
           
-          # Clean up dangling images to save space on VM
+          echo "Restarting services safely..."
+          sudo docker compose -f infra/docker-compose.yml up -d
+          
+          echo "Cleaning up dangling images..."
           sudo docker image prune -f
           echo "Deployment successful."
