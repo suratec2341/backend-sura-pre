@@ -18,10 +18,14 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           echo "Building and deploying application..."
-          # Pull latest images and build local ones with sudo to avoid permission issues
-          sudo docker compose -f infra/docker-compose.yml build --no-cache
+          # Disable BuildKit to workaround LXC permission issues on Hostinger
+          export DOCKER_BUILDKIT=0
+          export COMPOSE_DOCKER_CLI_BUILD=0
+          
+          # Pull latest images and build local ones with sudo
+          sudo -E docker compose -f infra/docker-compose.yml build
           # Restart services safely
-          sudo docker compose -f infra/docker-compose.yml up -d
+          sudo -E docker compose -f infra/docker-compose.yml up -d
           
           # Clean up dangling images to save space on VM
           sudo docker image prune -f
