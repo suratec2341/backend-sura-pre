@@ -1,7 +1,36 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import * as celery from 'celery-node';
 
 @Injectable()
-export class AiService {
-  // TODO: enqueue jobs to Python AI Worker via BullMQ
+export class AiService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(AiService.name);
+  private celeryClient: ReturnType<typeof celery.createClient>;
+
+  onModuleInit() {
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    this.celeryClient = celery.createClient(redisUrl, redisUrl);
+    this.logger.log('Connected to Celery broker via celery-node');
+  }
+
+  onModuleDestroy() {
+    if (this.celeryClient) {
+      this.celeryClient.disconnect();
+    }
+  }
+
+  async dispatchSessionSummaryTask(sessionId: string): Promise<string> {
+    this.logger.log(`Dispatching ai:summary task for session: ${sessionId}`);
+    const task = this.celeryClient.createTask('ai:summary');
+    const result = task.applyAsync([sessionId]);
+    return result.taskId;
+  }
+
+  async dispatchChatMessageTask(threadId: string, message: string): Promise<string> {
+    this.logger.log(`Dispatching ai:chat task for thread: ${threadId}`);
+    const task = this.celeryClient.createTask('ai:chat');
+    const result = task.applyAsync([threadId, message]);
+    return result.taskId;
+  }
+
   // TODO: deterministic program matching via program_recommendation_rules
 }

@@ -3,6 +3,7 @@ import { ValidationPipe } from "@nestjs/common";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { API_PREFIX } from "@blansole/shared";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -28,6 +29,16 @@ async function bootstrap() {
       transform: true, // auto-transform payloads to DTO instances
     }),
   );
+
+  // Swagger Configuration
+  const config = new DocumentBuilder()
+    .setTitle('Blansole API')
+    .setDescription('API documentation for Blansole Smart Insole Health App')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
   const port = Number(process.env.API_PORT ?? 3000);
   await app.listen(port);

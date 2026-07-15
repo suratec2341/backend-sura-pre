@@ -1,0 +1,28 @@
+name: Deploy to Private VM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Using Docker Compose to spin up the environment
+      - name: Deploy with Docker Compose
+        run: |
+          echo "Building and deploying application..."
+          # Pull latest images and build local ones
+          docker compose -f infra/docker-compose.yml build --no-cache
+          # Restart services safely
+          docker compose -f infra/docker-compose.yml up -d
+          
+          # Clean up dangling images to save space on VM
+          docker image prune -f
+          echo "Deployment successful."
