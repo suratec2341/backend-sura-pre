@@ -30,8 +30,10 @@ jobs:
           echo "Building images using GitHub servers..."
           docker compose -f infra/docker-compose.yml build
           
-          echo "Pushing images to GHCR..."
-          docker compose -f infra/docker-compose.yml push
+          echo "Pushing images to GHCR (with retries for unknown blob errors)..."
+          for i in 1 2 3; do
+            docker compose -f infra/docker-compose.yml push && break || sleep 5
+          done
 
   deploy:
     name: Deploy on Private VM
