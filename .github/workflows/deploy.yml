@@ -30,9 +30,13 @@ jobs:
           echo "Building images using GitHub servers..."
           docker compose -f infra/docker-compose.yml build
           
-          echo "Pushing images to GHCR (with retries for unknown blob errors)..."
-          for i in 1 2 3; do
-            docker compose -f infra/docker-compose.yml push && break || sleep 5
+          echo "Pushing images to GHCR sequentially to prevent freezing..."
+          SERVICES=("api" "worker-session" "worker-ai" "worker-notification" "worker-health-sync" "worker-link-checker" "worker-episode-summary")
+          for SERVICE in "${SERVICES[@]}"; do
+            echo "Pushing $SERVICE..."
+            for i in 1 2 3; do
+              docker push "ghcr.io/suratec2341/blansole-${SERVICE}:latest" && break || sleep 5
+            done
           done
 
   deploy:
