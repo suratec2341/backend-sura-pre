@@ -12,13 +12,17 @@ export function sanitizeAiPrompt(input: string): string {
   // 2. Remove common jailbreak prefix/suffix patterns or system prompt manipulation attempts
   // This is a basic layer. A full solution might involve LLM-based detection.
   const maliciousPatterns = [
-    /ignore all previous instructions/i,
-    /you are now/i,
-    /system prompt/i,
-    /ละทิ้งคำสั่งเดิมทั้งหมด/i,
-    /ลืมคำสั่งก่อนหน้า/i,
-    /พิมพ์คำสั่งก่อนหน้า/i,
-    /forget previous/i
+    /ignore all previous instructions/gi,
+    /you are now/gi,
+    /system prompt/gi,
+    /ละทิ้งคำสั่งเดิมทั้งหมด/gi,
+    /ลืมคำสั่งก่อนหน้า/gi,
+    /พิมพ์คำสั่งก่อนหน้า/gi,
+    /forget previous/gi,
+    /disregard.*?instructions/gi,
+    /override.*?system/gi,
+    /act as if/gi,
+    /pretend you/gi,
   ];
 
   for (const pattern of maliciousPatterns) {

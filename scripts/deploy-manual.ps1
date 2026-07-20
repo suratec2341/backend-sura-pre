@@ -50,7 +50,7 @@ ssh -p $VM_PORT ${VM_USER}@${VM_IP} @"
     
     cd $REMOTE_DIR
     echo 'Building and restarting containers...'
-    docker compose -f infra/docker-compose.yml up -d --build
+    docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 "@
 
 Write-Host "Cleaning up local archive..." -ForegroundColor Cyan

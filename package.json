@@ -37,8 +37,8 @@
     "db:migrate:deploy": "node ./node_modules/prisma/build/index.js migrate deploy",
     "db:studio": "node ./node_modules/prisma/build/index.js studio",
     "db:seed": "node -r ts-node/register prisma/seed.ts",
-    "docker:dev": "docker compose -f infra/docker-compose.yml up -d",
-    "docker:dev:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:dev": "docker compose --env-file .env -f infra/docker-compose.yml up -d --build",
+    "docker:dev:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
     "test:deploy": "node test-deployment.js"
   },
   "dependencies": {
@@ -53,6 +53,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.0.0",
     "bullmq": "^5.0.0",
+    "celery-node": "^0.5.9",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
     "helmet": "^8.0.0",
@@ -92,6 +93,6 @@
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   }
 }

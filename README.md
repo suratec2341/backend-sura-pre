@@ -25,6 +25,7 @@ infra/           # docker compose + nginx
 
 A local `.env` file is used for development defaults and secret placeholders.
 See `docs/environment.md` for the full variable list and which external keys are needed.
+The mobile/backend payload contract is documented in `docs/frontend-api-contract.md`.
 
 ## Local validation
 
@@ -35,7 +36,7 @@ npm test -- --runInBand
 DATABASE_URL=postgresql://blansole:blansole@localhost:5432/blansole npx prisma validate
 npm run build
 python -m compileall apps/worker-ai/src libs/python/src
-docker compose -f infra/docker-compose.yml config
+docker compose --env-file .env -f infra/docker-compose.yml config
 ```
 
 ## Docker dev
@@ -47,7 +48,7 @@ For Hostinger pull-based deployment, see `docs/hostinger-deployment.md`, `script
 Build and start local infrastructure plus app services:
 
 ```sh
-docker compose -f infra/docker-compose.yml up -d --build
+docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 ```
 
 Endpoints:
@@ -60,11 +61,11 @@ Endpoints:
 Stop services:
 
 ```sh
-docker compose -f infra/docker-compose.yml down
+docker compose --env-file .env -f infra/docker-compose.yml down
 ```
 
 ## Notes
 
-- Most API endpoints are still placeholders and need service/DTO/auth implementation before production use.
+- Frontend-facing auth, profile/onboarding, device, session/history, risk, insight, and notification endpoints are implemented.
 - An initial Prisma migration exists; run `npm run db:migrate:deploy` during deployment before serving traffic.
-- The Python AI worker currently uses Celery/Redis. The Nest side still needs queue integration for AI jobs.
+- BLE packet decoding and the final sensor-derived gait/pressure algorithms still require the insole protocol specification.

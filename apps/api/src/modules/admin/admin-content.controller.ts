@@ -1,7 +1,10 @@
 import { Controller, Get, Post, Put, Param, Body } from '@nestjs/common';
+import { Role } from '@blansole/shared';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 // ⭐ §7 Admin Panel — ต้อง auth role = admin/content_editor
 @Controller('admin/content')
+@Roles(Role.ADMIN, Role.CONTENT_EDITOR)
 export class AdminContentController {
   // --- Programs ---
   @Get('programs')

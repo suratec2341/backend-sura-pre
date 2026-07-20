@@ -17,33 +17,38 @@ datasource db {
 // ============================================================
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  status    String    @default("active") // active | suspended | deleted
-  createdAt DateTime  @default(now()) @map("created_at")
-  deletedAt DateTime? @map("deleted_at")
+  id               String    @id @default(uuid())
+  email            String    @unique
+  role             String    @default("user") // user | admin | content_editor
+  status           String    @default("active") // active | suspended | deleted
+  twoFactorSecret  String?   @map("two_factor_secret")
+  twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   // Relations
-  profile               UserProfile?
-  authProviders         AuthProvider[]
-  healthNotes           UserHealthNote[]
-  goals                 UserGoal[]
-  settings              UserSetting?
-  notificationPrefs     NotificationPreference[]
-  consents              UserConsent[]
-  devices               UserDevice[]
-  sessions              ActivitySession[]
-  chatThreads           AiChatThread[]
-  riskAssessments       RiskAssessment[]
-  memoryFacts           UserMemoryFact[]
-  episodeSummaries      EpisodeSummary[]
-  percentileStats       UserPercentileStat[]
-  programAssignments    UserProgramAssignment[]
-  notifications         Notification[]
-  healthIntegrations    HealthIntegration[]
-  aiSummaries           AiSummary[]
-  aiInsights            AiInsight[]
-  aiRecommendations     AiRecommendation[]
+  profile              UserProfile?
+  authProviders        AuthProvider[]
+  healthNotes          UserHealthNote[]
+  goals                UserGoal[]
+  settings             UserSetting?
+  notificationPrefs    NotificationPreference[]
+  consents             UserConsent[]
+  devices              UserDevice[]
+  sessions             ActivitySession[]
+  chatThreads          AiChatThread[]
+  riskAssessments      RiskAssessment[]
+  memoryFacts          UserMemoryFact[]
+  episodeSummaries     EpisodeSummary[]
+  percentileStats      UserPercentileStat[]
+  programAssignments   UserProgramAssignment[]
+  notifications        Notification[]
+  notificationEvents   NotificationEvent[]
+  healthIntegrations   HealthIntegration[]
+  healthDailySummaries HealthDailySummary[]
+  aiSummaries          AiSummary[]
+  aiInsights           AiInsight[]
+  aiRecommendations    AiRecommendation[]
 
   @@map("users")
 }
@@ -61,16 +66,19 @@ model AuthProvider {
 }
 
 model UserProfile {
-  userId              String   @id @map("user_id")
-  name                String?
-  age                 Int?
-  gender              String?
-  weightKg            Float?   @map("weight_kg")
-  heightCm            Float?   @map("height_cm")
-  activityLevel       String?  @map("activity_level")
-  exerciseFrequency   String?  @map("exercise_frequency")
-  sedentaryHoursPerDay Float?  @map("sedentary_hours_per_day")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  userId               String    @id @map("user_id")
+  name                 String?
+  birthday             DateTime? @db.Date
+  gender               String?
+  weightKg             Float?    @map("weight_kg")
+  heightCm             Float?    @map("height_cm")
+  activityLevel        String?   @map("activity_level")
+  exerciseFrequency    String?   @map("exercise_frequency")
+  sedentaryHoursPerDay Float?    @map("sedentary_hours_per_day")
+  primaryFootwear      String?   @map("primary_footwear")
+  footSizeLeft         Float?    @map("foot_size_left")
+  footSizeRight        Float?    @map("foot_size_right")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -78,11 +86,16 @@ model UserProfile {
 }
 
 model UserHealthNote {
-  id            String   @id @default(uuid())
-  userId        String   @map("user_id")
-  conditionNote String?  @map("condition_note")
-  painArea      String?  @map("pain_area")
-  reportedAt    DateTime @default(now()) @map("reported_at")
+  id                 String   @id @default(uuid())
+  userId             String   @map("user_id")
+  conditionNote      String?  @map("condition_note")
+  medicalConditions  Json?    @map("medical_conditions")
+  injuryHistory      String?  @map("injury_history")
+  currentMedications Json?    @map("current_medications")
+  painArea           String?  @map("pain_area")
+  painLevel          Int?     @map("pain_level")
+  painPoints         Json?    @map("pain_points")
+  reportedAt         DateTime @default(now()) @map("reported_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -104,8 +117,8 @@ model UserGoal {
 }
 
 model UserSetting {
-  userId     String @id @map("user_id")
-  language   String @default("th")
+  userId     String  @id @map("user_id")
+  language   String  @default("th")
   darkMode   Boolean @default(false) @map("dark_mode")
   unitSystem String  @default("metric") @map("unit_system")
   timeFormat String  @default("24h") @map("time_format")
@@ -119,7 +132,7 @@ model UserSetting {
 model NotificationPreference {
   id              String  @id @default(uuid())
   userId          String  @map("user_id")
-  channel         String  // push | email
+  channel         String // push | email
   category        String
   enabled         Boolean @default(true)
   quietHoursStart String? @map("quiet_hours_start")
@@ -168,8 +181,8 @@ model UserDevice {
   unpairedAt    DateTime? @map("unpaired_at")
   autoReconnect Boolean   @default(true) @map("auto_reconnect")
 
-  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device       Device            @relation(fields: [deviceId], references: [id])
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device       Device              @relation(fields: [deviceId], references: [id])
   statusLogs   DeviceStatusLog[]
   batteryLogs  DeviceBatteryLog[]
   syncLogs     DeviceSyncLog[]
@@ -206,14 +219,14 @@ model DeviceBatteryLog {
 }
 
 model DeviceSyncLog {
-  id                String   @id @default(uuid())
-  userDeviceId      String   @map("user_device_id")
-  syncType          String   @map("sync_type")
-  stepsSynced       Int?     @map("steps_synced")
-  distanceSynced    Float?   @map("distance_synced")
+  id                 String   @id @default(uuid())
+  userDeviceId       String   @map("user_device_id")
+  syncType           String   @map("sync_type")
+  stepsSynced        Int?     @map("steps_synced")
+  distanceSynced     Float?   @map("distance_synced")
   pressureDataSynced Boolean? @map("pressure_data_synced")
-  status            String
-  syncedAt          DateTime @default(now()) @map("synced_at")
+  status             String
+  syncedAt           DateTime @default(now()) @map("synced_at")
 
   userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
 
@@ -234,12 +247,14 @@ model FirmwareVersion {
 }
 
 model DeviceCalibration {
-  id                   String   @id @default(uuid())
-  userDeviceId         String   @map("user_device_id")
-  footSize             Float?   @map("foot_size")
-  weightAtCalibrationKg Float?  @map("weight_at_calibration_kg")
-  baselinePressureMap  String?  @map("baseline_pressure_map") // JSON or storage URL
-  calibratedAt         DateTime @default(now()) @map("calibrated_at")
+  id                    String   @id @default(uuid())
+  userDeviceId          String   @map("user_device_id")
+  footSize              Float?   @map("foot_size")
+  footSizeLeft          Float?   @map("foot_size_left")
+  footSizeRight         Float?   @map("foot_size_right")
+  weightAtCalibrationKg Float?   @map("weight_at_calibration_kg")
+  baselinePressureMap   String?  @map("baseline_pressure_map") // JSON or storage URL
+  calibratedAt          DateTime @default(now()) @map("calibrated_at")
 
   userDevice UserDevice @relation(fields: [userDeviceId], references: [id], onDelete: Cascade)
 
@@ -260,23 +275,41 @@ model ActivitySession {
   durationSec       Int?      @map("duration_sec")
   status            String    @default("recording") // recording | processing | completed | failed
   syncStatus        String    @default("synced") @map("sync_status") // synced | pending | conflict
-  clientSessionUuid String?   @unique @map("client_session_uuid")
+  clientSessionUuid String?   @map("client_session_uuid")
   createdAt         DateTime  @default(now()) @map("created_at")
 
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userDevice   UserDevice?    @relation(fields: [deviceId], references: [id])
-  route        SessionRoute?
-  metrics      SessionMetric?
-  pressureMaps SessionPressureMap[]
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userDevice    UserDevice?           @relation(fields: [deviceId], references: [id])
+  route         SessionRoute?
+  metrics       SessionMetric?
+  pressureMaps  SessionPressureMap[]
   pressureZones SessionPressureZone[]
-  gaitMetrics  SessionGaitMetric?
-  gaitPhases   SessionGaitPhase[]
-  alerts       SessionAlert[]
-  aiSummary    AiSummary?
-  aiInsights   AiInsight[]
+  gaitMetrics   SessionGaitMetric?
+  gaitPhases    SessionGaitPhase[]
+  alerts        SessionAlert[]
+  sensorSamples SessionSensorSample[]
+  aiSummary     AiSummary?
+  aiInsights    AiInsight[]
 
+  @@unique([userId, clientSessionUuid])
   @@index([userId, startedAt])
   @@map("activity_sessions")
+}
+
+model SessionSensorSample {
+  id         String   @id @default(uuid())
+  sessionId  String   @map("session_id")
+  sequence   Int?
+  recordedAt DateTime @map("recorded_at")
+  source     String   @default("api")
+  payload    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, recordedAt])
+  @@map("session_sensor_samples")
 }
 
 model SessionRoute {
@@ -292,18 +325,18 @@ model SessionRoute {
 }
 
 model SessionMetric {
-  sessionId         String @id @map("session_id")
-  steps             Int?
-  distanceKm        Float? @map("distance_km")
-  calories          Float?
-  speedKmh          Float? @map("speed_kmh")
-  pace              Float?
-  cadence           Float?
-  groundContactMs   Float? @map("ground_contact_ms")
-  footLiftHeightCm  Float? @map("foot_lift_height_cm")
-  walkQualityScore  Float? @map("walk_quality_score")
-  balanceScore      Float? @map("balance_score")
-  algorithmVersion  String @map("algorithm_version")
+  sessionId        String @id @map("session_id")
+  steps            Int?
+  distanceKm       Float? @map("distance_km")
+  calories         Float?
+  speedKmh         Float? @map("speed_kmh")
+  pace             Float?
+  cadence          Float?
+  groundContactMs  Float? @map("ground_contact_ms")
+  footLiftHeightCm Float? @map("foot_lift_height_cm")
+  walkQualityScore Float? @map("walk_quality_score")
+  balanceScore     Float? @map("balance_score")
+  algorithmVersion String @map("algorithm_version")
 
   session ActivitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -324,14 +357,14 @@ model SessionPressureMap {
 }
 
 model SessionPressureZone {
-  id               String @id @default(uuid())
-  sessionId        String @map("session_id")
-  footSide         String @map("foot_side") // left | right
-  forefootPercent  Float  @map("forefoot_percent")
-  midfootPercent   Float  @map("midfoot_percent")
-  heelPercent      Float  @map("heel_percent")
-  maxPressure      Float  @map("max_pressure")
-  avgPressure      Float  @map("avg_pressure")
+  id               String  @id @default(uuid())
+  sessionId        String  @map("session_id")
+  footSide         String  @map("foot_side") // left | right
+  forefootPercent  Float   @map("forefoot_percent")
+  midfootPercent   Float   @map("midfoot_percent")
+  heelPercent      Float   @map("heel_percent")
+  maxPressure      Float   @map("max_pressure")
+  avgPressure      Float   @map("avg_pressure")
   hotspotArea      String? @map("hotspot_area")
   pressureLevel    String  @map("pressure_level")
   algorithmVersion String  @map("algorithm_version")
@@ -377,7 +410,7 @@ model SessionAlert {
   id        String   @id @default(uuid())
   sessionId String   @map("session_id")
   alertType String   @map("alert_type")
-  severity  String   // info | warning | critical
+  severity  String // info | warning | critical
   message   String
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -394,7 +427,7 @@ model RiskAssessment {
   id               String   @id @default(uuid())
   userId           String   @map("user_id")
   assessmentType   String   @map("assessment_type") // fall_risk | pain_risk
-  scope            String   // single_session | rolling_7d | rolling_30d
+  scope            String // single_session | rolling_7d | rolling_30d
   sourceSessionId  String?  @map("source_session_id")
   score            Float
   riskLevel        String   @map("risk_level")
@@ -458,7 +491,7 @@ model AiChatThread {
 model AiChatMessage {
   id                 String   @id @default(uuid())
   threadId           String   @map("thread_id")
-  role               String   // user | assistant
+  role               String // user | assistant
   content            String
   contextSnapshotRef String?  @map("context_snapshot_ref")
   modelVersion       String?  @map("model_version")
@@ -474,7 +507,7 @@ model AiRecommendation {
   userId             String   @map("user_id")
   sessionId          String?  @map("session_id")
   recommendationText String   @map("recommendation_text")
-  category           String   // exercise | rest | posture
+  category           String // exercise | rest | posture
   modelVersion       String   @map("model_version")
   createdAt          DateTime @default(now()) @map("created_at")
 
@@ -536,7 +569,7 @@ model UserPercentileStat {
 model RagDocument {
   id                   String   @id @default(uuid())
   title                String
-  category             String   // gait_knowledge | pressure_explain | guideline | faq | safety_rule
+  category             String // gait_knowledge | pressure_explain | guideline | faq | safety_rule
   version              String
   isActive             Boolean  @default(true) @map("is_active")
   relatedConditionTags String[] @map("related_condition_tags")
@@ -564,10 +597,10 @@ model RagChunk {
 // Prisma doesn't natively support vector type yet — use raw SQL or
 // @db.Unsupported("vector(1536)") for the embedding column.
 model RagEmbedding {
-  id                    String @id @default(uuid())
-  chunkId               String @unique @map("chunk_id")
-  // embedding          Unsupported("vector(1536)") — ต้องเพิ่มผ่าน raw migration
-  embeddingModelVersion String @map("embedding_model_version")
+  id                    String                       @id @default(uuid())
+  chunkId               String                       @unique @map("chunk_id")
+  embedding             Unsupported("vector(1536)")?
+  embeddingModelVersion String                       @map("embedding_model_version")
 
   chunk RagChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
 
@@ -599,23 +632,23 @@ model ExerciseProgram {
 }
 
 model ExerciseVideo {
-  id              String    @id @default(uuid())
-  programId       String?   @map("program_id")
-  orderIndex      Int       @default(0) @map("order_index")
-  youtubeUrl      String    @map("youtube_url")
-  youtubeVideoId  String    @map("youtube_video_id")
-  sourceType      String    @default("own_channel") @map("source_type") // own_channel | external_licensed
-  title           String
-  aiDescription   String?   @map("ai_description") // ⭐ grounding text for AI — ห้ามเดาเพิ่ม
-  thumbnailUrl    String?   @map("thumbnail_url") // auto-fetch from oEmbed
-  durationSec     Int?      @map("duration_sec")  // auto-fetch from oEmbed
-  language        String    @default("th")
-  status          String    @default("draft") // draft | in_review | published | archived
-  linkStatus      String    @default("active") @map("link_status") // active | broken | private | removed
+  id                String    @id @default(uuid())
+  programId         String?   @map("program_id")
+  orderIndex        Int       @default(0) @map("order_index")
+  youtubeUrl        String    @map("youtube_url")
+  youtubeVideoId    String    @map("youtube_video_id")
+  sourceType        String    @default("own_channel") @map("source_type") // own_channel | external_licensed
+  title             String
+  aiDescription     String?   @map("ai_description") // ⭐ grounding text for AI — ห้ามเดาเพิ่ม
+  thumbnailUrl      String?   @map("thumbnail_url") // auto-fetch from oEmbed
+  durationSec       Int?      @map("duration_sec") // auto-fetch from oEmbed
+  language          String    @default("th")
+  status            String    @default("draft") // draft | in_review | published | archived
+  linkStatus        String    @default("active") @map("link_status") // active | broken | private | removed
   lastLinkCheckedAt DateTime? @map("last_link_checked_at")
-  createdBy       String?   @map("created_by")
-  reviewedBy      String?   @map("reviewed_by")
-  publishedAt     DateTime? @map("published_at")
+  createdBy         String?   @map("created_by")
+  reviewedBy        String?   @map("reviewed_by")
+  publishedAt       DateTime? @map("published_at")
 
   program ExerciseProgram? @relation(fields: [programId], references: [id])
 
@@ -660,7 +693,7 @@ model UserProgramAssignment {
   id           String   @id @default(uuid())
   userId       String   @map("user_id")
   programId    String   @map("program_id")
-  source       String   // ai_chat | manual | admin
+  source       String // ai_chat | manual | admin
   assignedAt   DateTime @default(now()) @map("assigned_at")
   status       String   @default("in_progress") // in_progress | completed | skipped
   userFeedback String?  @map("user_feedback")
@@ -676,7 +709,7 @@ model ContentReviewLog {
   contentId   String   @map("content_id")
   contentType String   @map("content_type") // program | video
   reviewerId  String   @map("reviewer_id")
-  action      String   // approved | rejected | unpublished
+  action      String // approved | rejected | unpublished
   note        String?
   reviewedAt  DateTime @default(now()) @map("reviewed_at")
 
@@ -697,7 +730,7 @@ model Notification {
   status    String   @default("pending") // pending | sent | read
   createdAt DateTime @default(now()) @map("created_at")
 
-  user         User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([userId, createdAt])
@@ -710,6 +743,8 @@ model NotificationEvent {
   eventType   String   @map("event_type")
   payloadJson Json?    @map("payload_json")
   createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_events")
 }
@@ -724,10 +759,10 @@ model NotificationRule {
 }
 
 model NotificationDeliveryLog {
-  id                String   @id @default(uuid())
-  notificationId    String   @map("notification_id")
+  id                String    @id @default(uuid())
+  notificationId    String    @map("notification_id")
   channel           String
-  providerMessageId String?  @map("provider_message_id")
+  providerMessageId String?   @map("provider_message_id")
   status            String
   deliveredAt       DateTime? @map("delivered_at")
 
@@ -741,13 +776,13 @@ model NotificationDeliveryLog {
 // ============================================================
 
 model HealthIntegration {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
-  provider    String    // apple_health | health_connect
-  status      String    @default("connected")
-  connectedAt DateTime  @default(now()) @map("connected_at")
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  provider    String // apple_health | health_connect
+  status      String   @default("connected")
+  connectedAt DateTime @default(now()) @map("connected_at")
 
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   syncLogs HealthSyncLog[]
 
   @@map("health_integrations")
@@ -767,13 +802,15 @@ model HealthSyncLog {
 }
 
 model HealthDailySummary {
-  id           String @id @default(uuid())
-  userId       String @map("user_id")
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
   date         DateTime @db.Date
   steps        Int?
-  distanceKm   Float? @map("distance_km")
+  distanceKm   Float?   @map("distance_km")
   calories     Float?
-  heartRateAvg Float? @map("heart_rate_avg")
+  heartRateAvg Float?   @map("heart_rate_avg")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@map("health_daily_summaries")

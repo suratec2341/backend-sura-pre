@@ -5,6 +5,10 @@ import * as celery from 'celery-node';
 jest.mock('celery-node', () => ({
   createClient: jest.fn().mockReturnValue({
     disconnect: jest.fn(),
+    asyncResult: jest.fn().mockReturnValue({
+      status: jest.fn().mockResolvedValue('SUCCESS'),
+      result: jest.fn().mockResolvedValue({ threadId: 'thread-123' }),
+    }),
     createTask: jest.fn().mockReturnValue({
       applyAsync: jest.fn().mockReturnValue({ taskId: 'mocked-task-id' }),
     }),
@@ -40,5 +44,18 @@ describe('AiService', () => {
   it('should dispatch chat message task', async () => {
     const taskId = await service.dispatchChatMessageTask('thread-123', 'Hello AI');
     expect(taskId).toBe('mocked-task-id');
+  });
+
+  it('should dispatch document embedding task', async () => {
+    const taskId = await service.dispatchEmbedDocumentTask('document-123');
+    expect(taskId).toBe('mocked-task-id');
+  });
+
+  it('should return completed task state and result', async () => {
+    await expect(service.getTaskState('task-123')).resolves.toEqual({
+      taskId: 'task-123',
+      status: 'SUCCESS',
+      result: { threadId: 'thread-123' },
+    });
   });
 });

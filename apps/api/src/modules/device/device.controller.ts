@@ -1,28 +1,76 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Put } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import {
+  BatteryLogDto,
+  CalibrateDeviceDto,
+  DeviceSyncDto,
+  PairDeviceDto,
+  UpdateDeviceDto,
+} from './dto/device.dto';
+import { DeviceService } from './device.service';
+
+interface AuthenticatedUser {
+  userId: string;
+}
 
 @Controller('devices')
 export class DeviceController {
+  constructor(private readonly deviceService: DeviceService) {}
+
   @Get()
-  list() { return { message: 'List devices — TODO' }; }
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.deviceService.list(user.userId);
+  }
 
   @Post('pair')
-  pair(@Body() body: any) { return { message: 'Pair device — TODO' }; }
+  pair(@CurrentUser() user: AuthenticatedUser, @Body() body: PairDeviceDto) {
+    return this.deviceService.pair(user.userId, body);
+  }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() body: any) { return { message: `Update device ${id} — TODO` }; }
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: UpdateDeviceDto,
+  ) {
+    return this.deviceService.update(user.userId, id, body);
+  }
 
   @Delete(':id')
-  remove(@Param('id') id: string) { return { message: `Remove device ${id} — TODO` }; }
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.deviceService.remove(user.userId, id);
+  }
 
   @Post(':id/sync')
-  sync(@Param('id') id: string) { return { message: `Sync device ${id} — TODO` }; }
+  sync(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: DeviceSyncDto,
+  ) {
+    return this.deviceService.sync(user.userId, id, body);
+  }
 
   @Get(':id/status')
-  status(@Param('id') id: string) { return { message: `Device ${id} status — TODO` }; }
+  status(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.deviceService.status(user.userId, id);
+  }
 
   @Post(':id/battery')
-  battery(@Param('id') id: string, @Body() body: any) { return { message: `Battery log ${id} — TODO` }; }
+  battery(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: BatteryLogDto,
+  ) {
+    return this.deviceService.logBattery(user.userId, id, body);
+  }
 
   @Post(':id/calibrate')
-  calibrate(@Param('id') id: string, @Body() body: any) { return { message: `Calibrate ${id} — TODO` }; }
+  calibrate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: CalibrateDeviceDto,
+  ) {
+    return this.deviceService.calibrate(user.userId, id, body);
+  }
 }

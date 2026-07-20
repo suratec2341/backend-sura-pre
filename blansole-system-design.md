@@ -156,7 +156,7 @@ auth_providers
   id, user_id, provider (google/facebook/apple), provider_uid
 
 user_profiles
-  user_id, name, age, gender, weight_kg, height_cm,
+  user_id, name, birthday, gender, weight_kg, height_cm,
   activity_level, exercise_frequency, sedentary_hours_per_day,
   updated_at
 

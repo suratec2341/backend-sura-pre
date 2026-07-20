@@ -32,5 +32,31 @@ export class AiService implements OnModuleInit, OnModuleDestroy {
     return result.taskId;
   }
 
+  async dispatchEmbedDocumentTask(documentId: string): Promise<string> {
+    this.logger.log(`Dispatching ai:embed_document task for document: ${documentId}`);
+    const task = this.celeryClient.createTask('ai:embed_document');
+    const result = task.applyAsync([documentId]);
+    return result.taskId;
+  }
+
+  async getTaskState(taskId: string): Promise<{
+    taskId: string;
+    status: string;
+    result?: unknown;
+  }> {
+    const asyncResult = this.celeryClient.asyncResult(taskId);
+    const status = (await asyncResult.status()) ?? 'PENDING';
+
+    if (status !== 'SUCCESS') {
+      return { taskId, status };
+    }
+
+    return {
+      taskId,
+      status,
+      result: await asyncResult.result(),
+    };
+  }
+
   // TODO: deterministic program matching via program_recommendation_rules
 }

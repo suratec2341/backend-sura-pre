@@ -1,90 +1,80 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
+import { authenticatedRequest } from './authenticated-request';
 
-// Mock sanitize-html before importing AppModule
 jest.mock('sanitize-html', () => jest.fn((input) => input));
 
 import { AppModule } from '../src/app.module';
+import { AuthService } from '../src/modules/auth/auth.service';
 import { API_PREFIX, PrismaService } from '@blansole/shared';
 
 describe('Auth & Account Controllers (e2e)', () => {
   let app: INestApplication;
-
-  // Mock PrismaService to prevent it from connecting to a database during tests
-  const mockPrismaService = {
-    $connect: jest.fn().mockResolvedValue(true),
-    $disconnect: jest.fn().mockResolvedValue(true),
+  const loginResult = {
+    accessToken: 'signed-access-token',
+    tokenType: 'Bearer',
+    expiresIn: '15m',
+    user: { id: 'user-test-user', email: 'user@example.com', role: 'user', onboardingComplete: false },
+  };
+  const authService = {
+    loginWithGoogle: jest.fn().mockResolvedValue(loginResult),
+    loginWithFacebook: jest.fn().mockResolvedValue(loginResult),
+    loginWithApple: jest.fn().mockResolvedValue(loginResult),
+    deleteAccount: jest.fn().mockResolvedValue(undefined),
+  };
+  const prisma = {
+    $connect: jest.fn(),
+    $disconnect: jest.fn(),
+    user: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'user-test-user',
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+      }),
+      update: jest.fn().mockResolvedValue({ id: 'user-test-user' }),
+    },
   };
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-    .overrideProvider(PrismaService)
-    .useValue(mockPrismaService)
-    .compile();
-
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prisma)
+      .overrideProvider(AuthService)
+      .useValue(authService)
+      .compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(API_PREFIX);
     await app.init();
   });
 
-  afterAll(async () => {
-    await app.close();
+  afterAll(() => app.close());
+
+  it('exchanges Google, Facebook, and Apple tokens for a backend JWT', async () => {
+    await request(app.getHttpServer()).post(`/${API_PREFIX}/auth/google`).send({ idToken: 'google-token' }).expect(200).expect(loginResult);
+    await request(app.getHttpServer()).post(`/${API_PREFIX}/auth/facebook`).send({ accessToken: 'facebook-token' }).expect(200).expect(loginResult);
+    await request(app.getHttpServer()).post(`/${API_PREFIX}/auth/apple`).send({ identityToken: 'apple-token' }).expect(200).expect(loginResult);
   });
 
-  describe('/api/v1/auth', () => {
-    it('/google (POST)', () => {
-      return request(app.getHttpServer())
-        .post(`/${API_PREFIX}/auth/google`)
-        .send({})
-        .expect(201)
-        .expect({ message: 'Google auth — not implemented yet' });
-    });
+  it('logs out stateless access-token clients', () =>
+    authenticatedRequest(app.getHttpServer()).post(`/${API_PREFIX}/auth/logout`).expect(204));
 
-    it('/facebook (POST)', () => {
-      return request(app.getHttpServer())
-        .post(`/${API_PREFIX}/auth/facebook`)
-        .send({})
-        .expect(201)
-        .expect({ message: 'Facebook auth — not implemented yet' });
-    });
+  it('generates a server-side 2FA secret without exposing it', () =>
+    authenticatedRequest(app.getHttpServer())
+      .post(`/${API_PREFIX}/auth/2fa/generate`)
+      .send({})
+      .expect(201)
+      .expect((response) => {
+        expect(response.body.otpauth_url).toBeDefined();
+        expect(response.body.secret).toBeUndefined();
+      }));
 
-    it('/logout (POST)', () => {
-      return request(app.getHttpServer())
-        .post(`/${API_PREFIX}/auth/logout`)
-        .send({})
-        .expect(204);
-    });
+  it('rejects 2FA verification without a token', () =>
+    authenticatedRequest(app.getHttpServer())
+      .post(`/${API_PREFIX}/auth/2fa/verify`)
+      .send({})
+      .expect(400));
 
-    it('/2fa/generate (POST)', () => {
-      return request(app.getHttpServer())
-        .post(`/${API_PREFIX}/auth/2fa/generate`)
-        .send({})
-        .expect(201)
-        .expect((res) => {
-          expect(res.body.message).toBeDefined();
-          expect(res.body.secret).toBeDefined();
-          expect(res.body.otpauth_url).toBeDefined();
-        });
-    });
-
-    it('/2fa/verify (POST) - missing token', () => {
-      return request(app.getHttpServer())
-        .post(`/${API_PREFIX}/auth/2fa/verify`)
-        .send({})
-        .expect(201)
-        .expect({ verified: false, message: 'Missing secret or token' });
-    });
-  });
-
-  describe('/api/v1/account', () => {
-    it('/ (DELETE)', () => {
-      return request(app.getHttpServer())
-        .delete(`/${API_PREFIX}/account`)
-        .expect(200)
-        .expect({ message: 'Account deletion — not implemented yet' });
-    });
-  });
+  it('deletes the authenticated account and returns no content', () =>
+    authenticatedRequest(app.getHttpServer()).delete(`/${API_PREFIX}/account`).expect(204));
 });

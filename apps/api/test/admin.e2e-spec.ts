@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import { adminRequest as request } from './authenticated-request';
 
 // Mock sanitize-html before importing AppModule
 jest.mock('sanitize-html', () => jest.fn((input) => input));

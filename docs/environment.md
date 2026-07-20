@@ -9,7 +9,7 @@ A local `.env` has been created with safe development defaults and blank placeho
 After editing `.env`, restart Docker services:
 
 ```sh
-docker compose -f infra/docker-compose.yml up -d --build
+docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 ```
 
 ## Keys you need to collect
@@ -42,10 +42,11 @@ None. Local Docker can run with the development defaults already in `.env`:
 | Variable | Where to get it | Notes |
 | --- | --- | --- |
 | `LLM_PROVIDER` | Internal decision | Default: `openai`. |
-| `LLM_API_KEY` | LLM provider dashboard | Current Python worker reads this. |
-| `OPENAI_API_KEY` | OpenAI dashboard | Set to the same value as `LLM_API_KEY` if using OpenAI SDK defaults. |
+| `LLM_API_KEY` | LLM provider dashboard | Reserved for future non-OpenAI providers; the current worker does not read it. |
+| `OPENAI_API_KEY` | OpenAI dashboard | Required by the current Python worker for chat and embeddings. |
 | `LLM_MODEL` | LLM provider model name | Default in `.env`: `gpt-4o-mini`. |
 | `EMBEDDING_MODEL` | LLM provider model name | Default in `.env`: `text-embedding-3-small`. |
+| `AI_WORKER_CONCURRENCY` | Internal tuning | Defaults to `2` for local development; accepted range is 1-16. |
 
 ### Needed when implementing content library / link checker
 

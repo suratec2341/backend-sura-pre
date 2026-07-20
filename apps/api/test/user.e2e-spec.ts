@@ -1,97 +1,90 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import { authenticatedRequest as request } from './authenticated-request';
 
-// Mock sanitize-html before importing AppModule
 jest.mock('sanitize-html', () => jest.fn((input) => input));
 
 import { AppModule } from '../src/app.module';
+import { UserService } from '../src/modules/user/user.service';
 import { API_PREFIX, PrismaService } from '@blansole/shared';
 
 describe('User Controller (e2e)', () => {
   let app: INestApplication;
-
-  const mockPrismaService = {
-    $connect: jest.fn().mockResolvedValue(true),
-    $disconnect: jest.fn().mockResolvedValue(true),
+  const userService = {
+    getMe: jest.fn().mockResolvedValue({ id: 'user-test-user', profile: { name: 'John' } }),
+    updateProfile: jest.fn().mockResolvedValue({ id: 'user-test-user', profile: { name: 'John Doe' } }),
+    getGoals: jest.fn().mockResolvedValue({ items: [], dailyProgress: { steps: 0 } }),
+    updateGoal: jest.fn().mockResolvedValue({ id: 'goal-1', goalType: 'daily_steps' }),
+    getSettings: jest.fn().mockResolvedValue({ language: 'th' }),
+    updateSettings: jest.fn().mockResolvedValue({ language: 'en' }),
+    getConsents: jest.fn().mockResolvedValue([]),
+    updateConsent: jest.fn().mockResolvedValue({ consentType: 'marketing', granted: true }),
+    getHealth: jest.fn().mockResolvedValue([]),
+    updateHealth: jest.fn().mockResolvedValue({ id: 'health-1', painLevel: 3 }),
+    getRisks: jest.fn().mockResolvedValue({ items: [], latest: {} }),
   };
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    })
-    .overrideProvider(PrismaService)
-    .useValue(mockPrismaService)
-    .compile();
-
+    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService)
+      .useValue({ $connect: jest.fn(), $disconnect: jest.fn() })
+      .overrideProvider(UserService)
+      .useValue(userService)
+      .compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(API_PREFIX);
     await app.init();
   });
 
-  afterAll(async () => {
-    await app.close();
+  afterAll(() => app.close());
+
+  it('returns the current user profile', () =>
+    request(app.getHttpServer()).get(`/${API_PREFIX}/me`).expect(200).expect({
+      id: 'user-test-user',
+      profile: { name: 'John' },
+    }));
+
+  it('updates onboarding fields using frontend names', () =>
+    request(app.getHttpServer())
+      .put(`/${API_PREFIX}/me/profile`)
+      .send({ name: 'John Doe', birthday: '1994-07-20', weight: 70, shoeType: 'running', painPoints: ['heel'] })
+      .expect(200)
+      .expect({ id: 'user-test-user', profile: { name: 'John Doe' } }));
+
+  it('returns goals with daily progress', () =>
+    request(app.getHttpServer())
+      .get(`/${API_PREFIX}/me/goals`)
+      .expect(200)
+      .expect({ items: [], dailyProgress: { steps: 0 } }));
+
+  it('updates a goal', () =>
+    request(app.getHttpServer())
+      .put(`/${API_PREFIX}/me/goals`)
+      .send({ goal: 'daily_steps', targetSteps: 8000 })
+      .expect(200)
+      .expect({ id: 'goal-1', goalType: 'daily_steps' }));
+
+  it('reads and updates settings', async () => {
+    await request(app.getHttpServer()).get(`/${API_PREFIX}/me/settings`).expect(200).expect({ language: 'th' });
+    await request(app.getHttpServer()).put(`/${API_PREFIX}/me/settings`).send({ language: 'en' }).expect(200).expect({ language: 'en' });
   });
 
-  describe('/api/v1/me', () => {
-    it('/ (GET)', () => {
-      return request(app.getHttpServer())
-        .get(`/${API_PREFIX}/me`)
-        .expect(200)
-        .expect({ message: 'Get profile — not implemented yet' });
-    });
+  it('reads and updates consent', async () => {
+    await request(app.getHttpServer()).get(`/${API_PREFIX}/me/consents`).expect(200).expect([]);
+    await request(app.getHttpServer())
+      .put(`/${API_PREFIX}/me/consents/marketing`)
+      .send({ granted: true, version: '1.0' })
+      .expect(200)
+      .expect({ consentType: 'marketing', granted: true });
+  });
 
-    it('/profile (PUT)', () => {
-      return request(app.getHttpServer())
-        .put(`/${API_PREFIX}/me/profile`)
-        .send({ name: 'John Doe' })
-        .expect(200)
-        .expect({ message: 'Update profile — not implemented yet' });
-    });
-
-    it('/goals (GET)', () => {
-      return request(app.getHttpServer())
-        .get(`/${API_PREFIX}/me/goals`)
-        .expect(200)
-        .expect({ message: 'Get goals — not implemented yet' });
-    });
-
-    it('/goals (PUT)', () => {
-      return request(app.getHttpServer())
-        .put(`/${API_PREFIX}/me/goals`)
-        .send({ target: 100 })
-        .expect(200)
-        .expect({ message: 'Update goals — not implemented yet' });
-    });
-
-    it('/settings (GET)', () => {
-      return request(app.getHttpServer())
-        .get(`/${API_PREFIX}/me/settings`)
-        .expect(200)
-        .expect({ message: 'Get settings — not implemented yet' });
-    });
-
-    it('/settings (PUT)', () => {
-      return request(app.getHttpServer())
-        .put(`/${API_PREFIX}/me/settings`)
-        .send({ theme: 'dark' })
-        .expect(200)
-        .expect({ message: 'Update settings — not implemented yet' });
-    });
-
-    it('/consents (GET)', () => {
-      return request(app.getHttpServer())
-        .get(`/${API_PREFIX}/me/consents`)
-        .expect(200)
-        .expect({ message: 'Get consents — not implemented yet' });
-    });
-
-    it('/consents/:type (PUT)', () => {
-      return request(app.getHttpServer())
-        .put(`/${API_PREFIX}/me/consents/marketing`)
-        .send({ value: true })
-        .expect(200)
-        .expect({ message: 'Update consent — not implemented yet' });
-    });
+  it('exposes health history and latest risks', async () => {
+    await request(app.getHttpServer()).get(`/${API_PREFIX}/me/health`).expect(200).expect([]);
+    await request(app.getHttpServer())
+      .put(`/${API_PREFIX}/me/health`)
+      .send({ painLevel: 3, painPoints: ['heel'] })
+      .expect(200)
+      .expect({ id: 'health-1', painLevel: 3 });
+    await request(app.getHttpServer()).get(`/${API_PREFIX}/me/risks`).expect(200).expect({ items: [], latest: {} });
   });
 });

@@ -31,3 +31,14 @@ export enum SourceType {
   OWN_CHANNEL = 'own_channel',
   EXTERNAL_LICENSED = 'external_licensed',
 }
+
+/** Queue name constants */
+export const QUEUES = {
+  SESSION_PROCESS: 'session-process',
+  AI_SUMMARY: 'ai-summary',
+  AI_CHAT: 'ai-chat',
+  NOTIFICATION: 'notification-send',
+  HEALTH_SYNC: 'health-sync',
+  LINK_CHECK: 'link-check',
+  EPISODE_SUMMARY: 'episode-summary',
+} as const;

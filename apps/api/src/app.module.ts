@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaService, RedisModule } from '@blansole/shared';
+import { PrismaModule, RedisModule } from '@blansole/shared';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from './modules/auth/guards/roles.guard';
 
 // Feature modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,7 +28,8 @@ import { HealthCheckController } from './health-check.controller';
       limit: 100,
     }]),
 
-    // Shared
+    // Shared (both @Global — available everywhere)
+    PrismaModule,
     RedisModule,
 
     // Feature modules (ตรงกับ §2 System Architecture Diagram)
@@ -41,12 +44,18 @@ import { HealthCheckController } from './health-check.controller';
   ],
   controllers: [HealthCheckController],
   providers: [
-    PrismaService,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
   ],
-  exports: [PrismaService],
 })
 export class AppModule {}
