@@ -44,6 +44,7 @@ model User {
   programAssignments   UserProgramAssignment[]
   notifications        Notification[]
   notificationEvents   NotificationEvent[]
+  pushRegistrations    PushRegistration[]
   healthIntegrations   HealthIntegration[]
   healthDailySummaries HealthDailySummary[]
   aiSummaries          AiSummary[]
@@ -547,6 +548,7 @@ model EpisodeSummary {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, periodType, periodStart, periodEnd], map: "episode_summaries_user_period_key")
   @@map("episode_summaries")
 }
 
@@ -722,15 +724,17 @@ model ContentReviewLog {
 // ============================================================
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  category  String
-  title     String
-  body      String
-  status    String   @default("pending") // pending | sent | read
-  createdAt DateTime @default(now()) @map("created_at")
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  sourceEventId String?  @unique @map("source_event_id")
+  category      String
+  title         String
+  body          String
+  status        String   @default("pending") // pending | sent | read
+  createdAt     DateTime @default(now()) @map("created_at")
 
   user         User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceEvent  NotificationEvent?        @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
   deliveryLogs NotificationDeliveryLog[]
 
   @@index([userId, createdAt])
@@ -738,15 +742,36 @@ model Notification {
 }
 
 model NotificationEvent {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  eventType   String   @map("event_type")
-  payloadJson Json?    @map("payload_json")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  eventType       String    @map("event_type")
+  payloadJson     Json?     @map("payload_json")
+  processedAt     DateTime? @map("processed_at")
+  processingError String?   @map("processing_error")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification Notification?
+
+  @@index([processedAt, createdAt])
+  @@map("notification_events")
+}
+
+model PushRegistration {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  provider  String // expo | fcm | apns
+  platform  String // android | ios
+  active    Boolean  @default(true)
+  lastError String?  @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("notification_events")
+  @@index([userId, active])
+  @@map("push_registrations")
 }
 
 model NotificationRule {

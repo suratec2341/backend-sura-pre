@@ -47,8 +47,8 @@ END $$;
 -- Protocol-neutral storage lets the API safely accept JSON/NDJSON sensor data
 -- before the insole packet format and derived algorithms are finalized.
 CREATE TABLE IF NOT EXISTS "session_sensor_samples" (
-  "id" UUID NOT NULL,
-  "session_id" UUID NOT NULL,
+  "id" TEXT NOT NULL,
+  "session_id" TEXT NOT NULL,
   "sequence" INTEGER,
   "recorded_at" TIMESTAMP(3) NOT NULL,
   "source" TEXT NOT NULL DEFAULT 'api',

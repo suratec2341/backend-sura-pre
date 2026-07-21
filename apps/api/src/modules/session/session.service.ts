@@ -1,6 +1,11 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@blansole/shared';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "@blansole/shared";
 import {
   FinishSessionDto,
   PushSessionDataDto,
@@ -8,8 +13,8 @@ import {
   SessionListQueryDto,
   StartSessionDto,
   SyncBatchDto,
-} from './dto/session.dto';
-import { SessionProcessingQueueService } from './session-processing-queue.service';
+} from "./dto/session.dto";
+import { SessionProcessingQueueService } from "./session-processing-queue.service";
 
 export interface UploadedSensorFile {
   buffer: Buffer;
@@ -41,7 +46,7 @@ export class SessionService {
       data: {
         userId,
         deviceId: body.deviceId,
-        activityType: body.activityType?.trim() || 'walking',
+        activityType: body.activityType?.trim() || "walking",
         startedAt: body.startedAt ? new Date(body.startedAt) : new Date(),
         clientSessionUuid: body.clientSessionUuid,
       },
@@ -53,23 +58,53 @@ export class SessionService {
     const samples = body.samples?.length
       ? body.samples
       : body.data
-        ? [{ data: body.data, recordedAt: body.recordedAt, sequence: body.sequence }]
+        ? [
+            {
+              data: body.data,
+              recordedAt: body.recordedAt,
+              sequence: body.sequence,
+            },
+          ]
         : [];
-    if (!samples.length) throw new BadRequestException('samples or data is required');
-    const accepted = await this.storeSamples(id, samples, body.source ?? 'realtime');
+    if (!samples.length)
+      throw new BadRequestException("samples or data is required");
+    const accepted = await this.storeSamples(
+      id,
+      samples,
+      body.source ?? "realtime",
+    );
     return { sessionId: id, accepted };
   }
 
-  async syncBatch(userId: string, body: SyncBatchDto, file?: UploadedSensorFile) {
+  async syncBatch(
+    userId: string,
+    body: SyncBatchDto,
+    file?: UploadedSensorFile,
+  ) {
     const clientSessionId = (body.session_id ?? body.sessionId)?.trim();
-    if (!clientSessionId) throw new BadRequestException('session_id or sessionId is required');
-    if (file && !['application/x-ndjson', 'application/json', 'text/plain', 'application/octet-stream'].includes(file.mimetype)) {
-      throw new BadRequestException('file must contain JSON Lines (NDJSON)');
+    if (!clientSessionId)
+      throw new BadRequestException("session_id or sessionId is required");
+    if (
+      file &&
+      ![
+        "application/x-ndjson",
+        "application/json",
+        "text/plain",
+        "application/octet-stream",
+      ].includes(file.mimetype)
+    ) {
+      throw new BadRequestException("file must contain JSON Lines (NDJSON)");
     }
 
-    const samples = file ? this.parseNdjson(file.buffer) : body.samples ?? [];
-    if (!samples.length) throw new BadRequestException('Uploaded batch contains no sensor samples');
-    if (samples.length > 20_000) throw new BadRequestException('A batch can contain at most 20000 samples');
+    const samples = file ? this.parseNdjson(file.buffer) : (body.samples ?? []);
+    if (!samples.length)
+      throw new BadRequestException(
+        "Uploaded batch contains no sensor samples",
+      );
+    if (samples.length > 20_000)
+      throw new BadRequestException(
+        "A batch can contain at most 20000 samples",
+      );
 
     let session = await this.prisma.activitySession.findFirst({
       where: {
@@ -82,37 +117,58 @@ export class SessionService {
       session = await this.prisma.activitySession.create({
         data: {
           userId,
-          activityType: 'walking',
+          activityType: "walking",
           startedAt: firstTimestamp,
           clientSessionUuid: clientSessionId,
-          syncStatus: 'pending',
+          syncStatus: "pending",
         },
       });
     }
 
-    const source = (body.device_type ?? body.deviceType)?.trim() || 'offline';
+    const source = (body.device_type ?? body.deviceType)?.trim() || "offline";
     const accepted = await this.storeSamples(session.id, samples, source);
     await this.prisma.activitySession.update({
       where: { id: session.id },
-      data: { syncStatus: 'synced' },
+      data: { syncStatus: "synced" },
     });
-    return { sessionId: session.id, clientSessionUuid: clientSessionId, accepted };
+    return {
+      sessionId: session.id,
+      clientSessionUuid: clientSessionId,
+      accepted,
+    };
   }
 
   async finish(userId: string, id: string, body: FinishSessionDto) {
     const session = await this.assertOwnedSession(userId, id);
-    if (session.status === 'completed') return this.get(userId, id);
+    if (session.status === "completed") return this.get(userId, id);
 
     const endedAt = body.endedAt ? new Date(body.endedAt) : new Date();
-    const durationSec = body.durationSec
-      ?? (body.duration !== undefined ? Math.round(body.duration * 60) : Math.max(0, Math.round((endedAt.getTime() - session.startedAt.getTime()) / 1000)));
+    const durationSec =
+      body.durationSec ??
+      (body.duration !== undefined
+        ? Math.round(body.duration * 60)
+        : Math.max(
+            0,
+            Math.round(
+              (endedAt.getTime() - session.startedAt.getTime()) / 1000,
+            ),
+          ));
 
     await this.prisma.$transaction(async (tx) => {
       await tx.activitySession.update({
         where: { id },
-        data: { endedAt, durationSec, status: 'processing', syncStatus: 'synced' },
+        data: {
+          endedAt,
+          durationSec,
+          status: "processing",
+          syncStatus: "synced",
+        },
       });
-      if (body.steps !== undefined || body.distance !== undefined || body.calories !== undefined) {
+      if (
+        body.steps !== undefined ||
+        body.distance !== undefined ||
+        body.calories !== undefined
+      ) {
         await tx.sessionMetric.upsert({
           where: { sessionId: id },
           create: {
@@ -120,7 +176,7 @@ export class SessionService {
             steps: body.steps,
             distanceKm: body.distance,
             calories: body.calories,
-            algorithmVersion: 'client-v1',
+            algorithmVersion: "client-v1",
           },
           update: {
             steps: body.steps,
@@ -133,8 +189,8 @@ export class SessionService {
       const zones = body.pressureZones?.length
         ? body.pressureZones
         : [
-            body.peakLeft ? this.peakOnlyZone('left', body.peakLeft) : null,
-            body.peakRight ? this.peakOnlyZone('right', body.peakRight) : null,
+            body.peakLeft ? this.peakOnlyZone("left", body.peakLeft) : null,
+            body.peakRight ? this.peakOnlyZone("right", body.peakRight) : null,
           ].filter((zone): zone is NonNullable<typeof zone> => zone !== null);
       if (zones.length) {
         await tx.sessionPressureZone.deleteMany({ where: { sessionId: id } });
@@ -148,8 +204,10 @@ export class SessionService {
             maxPressure: zone.maxPressure,
             avgPressure: zone.avgPressure,
             hotspotArea: zone.hotspotArea,
-            pressureLevel: zone.pressureLevel ?? 'unknown',
-            algorithmVersion: body.pressureZones?.length ? 'client-v1' : 'client-peak-v1',
+            pressureLevel: zone.pressureLevel ?? "unknown",
+            algorithmVersion: body.pressureZones?.length
+              ? "client-v1"
+              : "client-peak-v1",
           })),
         });
       }
@@ -161,25 +219,28 @@ export class SessionService {
   }
 
   async list(userId: string, query: SessionListQueryDto) {
-    const from = query.from ? new Date(query.from) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const from = query.from
+      ? new Date(query.from)
+      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const to = query.to ? new Date(query.to) : new Date();
-    if (from > to) throw new BadRequestException('from must be before to');
+    if (from > to) throw new BadRequestException("from must be before to");
 
     const rows = await this.prisma.activitySession.findMany({
       where: { userId, startedAt: { gte: from, lte: to } },
-      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
       take: query.limit ?? 50,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       include: {
         metrics: true,
         pressureZones: true,
         gaitMetrics: true,
-        aiInsights: { orderBy: { createdAt: 'desc' }, take: 1 },
+        aiInsights: { orderBy: { createdAt: "desc" }, take: 1 },
       },
     });
     return {
       items: rows.map((row) => this.mapSession(row)),
-      nextCursor: rows.length === (query.limit ?? 50) ? rows.at(-1)?.id ?? null : null,
+      nextCursor:
+        rows.length === (query.limit ?? 50) ? (rows.at(-1)?.id ?? null) : null,
     };
   }
 
@@ -189,19 +250,19 @@ export class SessionService {
       include: {
         metrics: true,
         pressureZones: true,
-        pressureMaps: { orderBy: { capturedAt: 'desc' } },
+        pressureMaps: { orderBy: { capturedAt: "desc" } },
         gaitMetrics: true,
         gaitPhases: true,
-        alerts: { orderBy: { createdAt: 'desc' } },
+        alerts: { orderBy: { createdAt: "desc" } },
         aiSummary: true,
-        aiInsights: { orderBy: { createdAt: 'desc' } },
+        aiInsights: { orderBy: { createdAt: "desc" } },
         _count: { select: { sensorSamples: true } },
       },
     });
-    if (!row) throw new NotFoundException('Activity session not found');
+    if (!row) throw new NotFoundException("Activity session not found");
     const risks = await this.prisma.riskAssessment.findMany({
       where: { userId, sourceSessionId: id },
-      orderBy: { computedAt: 'desc' },
+      orderBy: { computedAt: "desc" },
     });
     return { ...this.mapSession(row), risks };
   }
@@ -209,18 +270,25 @@ export class SessionService {
   async pressureMap(userId: string, id: string) {
     await this.assertOwnedSession(userId, id);
     const [maps, zones] = await Promise.all([
-      this.prisma.sessionPressureMap.findMany({ where: { sessionId: id }, orderBy: { capturedAt: 'desc' } }),
+      this.prisma.sessionPressureMap.findMany({
+        where: { sessionId: id },
+        orderBy: { capturedAt: "desc" },
+      }),
       this.prisma.sessionPressureZone.findMany({ where: { sessionId: id } }),
     ]);
-    const left = zones.find((zone) => zone.footSide === 'left');
-    const right = zones.find((zone) => zone.footSide === 'right');
+    const left = zones.find((zone) => zone.footSide === "left");
+    const right = zones.find((zone) => zone.footSide === "right");
     const total = (left?.avgPressure ?? 0) + (right?.avgPressure ?? 0);
     return {
       maps,
       zones,
       balance: {
-        left: total ? Math.round(((left?.avgPressure ?? 0) / total) * 1000) / 10 : 50,
-        right: total ? Math.round(((right?.avgPressure ?? 0) / total) * 1000) / 10 : 50,
+        left: total
+          ? Math.round(((left?.avgPressure ?? 0) / total) * 1000) / 10
+          : 50,
+        right: total
+          ? Math.round(((right?.avgPressure ?? 0) / total) * 1000) / 10
+          : 50,
       },
     };
   }
@@ -229,7 +297,10 @@ export class SessionService {
     await this.assertOwnedSession(userId, id);
     const [metrics, phases] = await Promise.all([
       this.prisma.sessionGaitMetric.findUnique({ where: { sessionId: id } }),
-      this.prisma.sessionGaitPhase.findMany({ where: { sessionId: id }, orderBy: { startPct: 'asc' } }),
+      this.prisma.sessionGaitPhase.findMany({
+        where: { sessionId: id },
+        orderBy: { startPct: "asc" },
+      }),
     ]);
     return { metrics, phases };
   }
@@ -238,11 +309,15 @@ export class SessionService {
     await this.assertOwnedSession(userId, id);
     return this.prisma.aiInsight.findMany({
       where: { userId, sessionId: id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
-  private async storeSamples(sessionId: string, samples: SensorSampleDto[], source: string) {
+  private async storeSamples(
+    sessionId: string,
+    samples: SensorSampleDto[],
+    source: string,
+  ) {
     let accepted = 0;
     for (let offset = 0; offset < samples.length; offset += 1000) {
       const chunk = samples.slice(offset, offset + 1000);
@@ -252,7 +327,9 @@ export class SessionService {
           sequence: sample.sequence,
           recordedAt: this.sampleDate(sample.recordedAt),
           source,
-          payload: (sample.payload ?? sample.data ?? {}) as Prisma.InputJsonValue,
+          payload: (sample.payload ??
+            sample.data ??
+            {}) as Prisma.InputJsonValue,
         })),
         skipDuplicates: true,
       });
@@ -262,16 +339,26 @@ export class SessionService {
   }
 
   private parseNdjson(buffer: Buffer): SensorSampleDto[] {
-    const lines = buffer.toString('utf8').split(/\r?\n/).filter((line) => line.trim());
+    const lines = buffer
+      .toString("utf8")
+      .split(/\r?\n/)
+      .filter((line) => line.trim());
     return lines.map((line, index) => {
       try {
         const payload = JSON.parse(line) as Record<string, unknown>;
-        if (!payload || Array.isArray(payload) || typeof payload !== 'object') throw new Error('not an object');
-        const timestamp = payload.recordedAt ?? payload.timestamp ?? payload.time;
+        if (!payload || Array.isArray(payload) || typeof payload !== "object")
+          throw new Error("not an object");
+        const timestamp =
+          payload.recordedAt ?? payload.timestamp ?? payload.time ?? payload.t;
         const sequence = payload.sequence ?? payload.index;
         return {
-          recordedAt: typeof timestamp === 'string' ? timestamp : undefined,
-          sequence: typeof sequence === 'number' && Number.isInteger(sequence) && sequence >= 0 ? sequence : index,
+          recordedAt: this.timestampString(timestamp),
+          sequence:
+            typeof sequence === "number" &&
+            Number.isInteger(sequence) &&
+            sequence >= 0
+              ? sequence
+              : index,
           payload,
         };
       } catch {
@@ -282,13 +369,26 @@ export class SessionService {
 
   private sampleDate(value?: string) {
     const date = value ? new Date(value) : new Date();
-    if (Number.isNaN(date.getTime())) throw new BadRequestException('Invalid sensor sample timestamp');
+    if (Number.isNaN(date.getTime()))
+      throw new BadRequestException("Invalid sensor sample timestamp");
     return date;
   }
 
+  private timestampString(value: unknown) {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const milliseconds = value < 10_000_000_000 ? value * 1_000 : value;
+      const date = new Date(milliseconds);
+      if (!Number.isNaN(date.getTime())) return date.toISOString();
+    }
+    return undefined;
+  }
+
   private async assertOwnedSession(userId: string, id: string) {
-    const session = await this.prisma.activitySession.findFirst({ where: { id, userId } });
-    if (!session) throw new NotFoundException('Activity session not found');
+    const session = await this.prisma.activitySession.findFirst({
+      where: { id, userId },
+    });
+    if (!session) throw new NotFoundException("Activity session not found");
     return session;
   }
 
@@ -297,10 +397,10 @@ export class SessionService {
       where: { id, userId, unpairedAt: null },
       select: { id: true },
     });
-    if (!device) throw new NotFoundException('Device not found');
+    if (!device) throw new NotFoundException("Device not found");
   }
 
-  private peakOnlyZone(footSide: 'left' | 'right', hotspotArea: string) {
+  private peakOnlyZone(footSide: "left" | "right", hotspotArea: string) {
     return {
       footSide,
       forefootPercent: 0,
@@ -309,13 +409,17 @@ export class SessionService {
       maxPressure: 0,
       avgPressure: 0,
       hotspotArea,
-      pressureLevel: 'unknown',
+      pressureLevel: "unknown",
     };
   }
 
   private mapSession(row: any) {
-    const left = row.pressureZones?.find((zone: any) => zone.footSide === 'left');
-    const right = row.pressureZones?.find((zone: any) => zone.footSide === 'right');
+    const left = row.pressureZones?.find(
+      (zone: any) => zone.footSide === "left",
+    );
+    const right = row.pressureZones?.find(
+      (zone: any) => zone.footSide === "right",
+    );
     return {
       ...row,
       date: row.startedAt.toISOString().slice(0, 10),

@@ -25,6 +25,10 @@ from .database import (
     rag_chunks,
     rag_documents,
     rag_embeddings,
+    risk_assessments,
+    session_gait_metrics,
+    session_metrics,
+    session_pressure_zones,
 )
 
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
@@ -106,19 +110,70 @@ def generate_session_summary(session_id: str):
     db = SessionLocal()
     try:
         session_record = db.execute(
-            select(activity_sessions.c.user_id).where(activity_sessions.c.id == session_id)
+            select(
+                activity_sessions.c.user_id,
+                activity_sessions.c.activity_type,
+                activity_sessions.c.started_at,
+                activity_sessions.c.duration_sec,
+                activity_sessions.c.status,
+            ).where(activity_sessions.c.id == session_id)
         ).first()
         if not session_record:
             raise ValueError(f"Activity session {session_id} was not found")
 
-        user_id = session_record[0]
+        user_id = session_record.user_id
+        metric_record = db.execute(
+            select(session_metrics).where(session_metrics.c.session_id == session_id)
+        ).mappings().first()
+        pressure_records = db.execute(
+            select(session_pressure_zones)
+            .where(session_pressure_zones.c.session_id == session_id)
+            .order_by(session_pressure_zones.c.foot_side.asc())
+        ).mappings().all()
+        gait_record = db.execute(
+            select(session_gait_metrics).where(session_gait_metrics.c.session_id == session_id)
+        ).mappings().first()
+        risk_records = db.execute(
+            select(
+                risk_assessments.c.assessment_type,
+                risk_assessments.c.scope,
+                risk_assessments.c.score,
+                risk_assessments.c.risk_level,
+                risk_assessments.c.algorithm_version,
+            )
+            .where(risk_assessments.c.user_id == user_id)
+            .where(risk_assessments.c.source_session_id == session_id)
+        ).mappings().all()
+        grounded_context = {
+            "session": {
+                "activityType": session_record.activity_type,
+                "startedAt": session_record.started_at.isoformat(),
+                "durationSec": session_record.duration_sec,
+                "status": session_record.status,
+            },
+            "metrics": dict(metric_record) if metric_record else None,
+            "pressureZones": [dict(row) for row in pressure_records],
+            "gait": dict(gait_record) if gait_record else None,
+            "riskAssessments": [dict(row) for row in risk_records],
+        }
 
-        # Generate summary using OpenAI
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a sports science assistant. Summarize the user's running session in 2-3 sentences."},
-                {"role": "user", "content": f"Generate a summary for session ID: {session_id}"}
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarize the supplied smart-insole session in 2-3 concise sentences. "
+                        "Use only values present in the JSON. Do not invent missing metrics, "
+                        "do not diagnose a condition, and do not turn an unclassified pressure "
+                        "value into a medical risk. Mention that validated risk data is unavailable "
+                        "when no risk assessment is supplied."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(grounded_context, ensure_ascii=False, default=str),
+                },
             ]
         )
         summary_text = response.choices[0].message.content
@@ -131,7 +186,7 @@ def generate_session_summary(session_id: str):
             session_id=session_id,
             summary_text=summary_text,
             model_version=MODEL_NAME,
-            prompt_version="v1",
+            prompt_version="grounded-session-v2",
             created_at=datetime.utcnow(),
         )
         db.execute(

@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform, Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
@@ -12,11 +12,11 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 export class NotificationListQueryDto {
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === "true")
   @IsBoolean()
   unreadOnly?: boolean;
 
@@ -36,7 +36,7 @@ export class MarkNotificationsReadDto {
 }
 
 export class NotificationPreferenceDto {
-  @IsIn(['push', 'email'])
+  @IsIn(["push", "email"])
   channel!: string;
 
   @IsString()
@@ -78,4 +78,17 @@ export class UpdateNotificationSettingsDto {
   @ValidateNested({ each: true })
   @Type(() => NotificationPreferenceDto)
   preferences?: NotificationPreferenceDto[];
+}
+
+export class RegisterPushDeviceDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4_096)
+  token!: string;
+
+  @IsIn(["expo", "fcm", "apns"])
+  provider!: string;
+
+  @IsIn(["android", "ios"])
+  platform!: string;
 }

@@ -1,50 +1,112 @@
-import { Controller, Get, Post, Put, Param, Body } from '@nestjs/common';
-import { Role } from '@blansole/shared';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Body, Controller, Get, Param, Post, Put, Query } from "@nestjs/common";
+import { Role } from "@blansole/shared";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import { Roles } from "../auth/decorators/roles.decorator";
+import { AdminContentService } from "./admin-content.service";
+import {
+  CreateProgramDto,
+  CreateRecommendationRuleDto,
+  CreateTagDto,
+  CreateVideoDto,
+  ProgramListQueryDto,
+  UpdateProgramDto,
+  UpdateVideoDto,
+} from "./dto/admin-content.dto";
 
-// ⭐ §7 Admin Panel — ต้อง auth role = admin/content_editor
-@Controller('admin/content')
+interface StaffUser {
+  userId: string;
+}
+
+@Controller("admin/content")
 @Roles(Role.ADMIN, Role.CONTENT_EDITOR)
 export class AdminContentController {
-  // --- Programs ---
-  @Get('programs')
-  listPrograms() { return { message: 'List programs — TODO' }; }
+  constructor(private readonly contentService: AdminContentService) {}
 
-  @Post('programs')
-  createProgram(@Body() body: any) { return { message: 'Create program — TODO' }; }
+  @Get("programs")
+  listPrograms(@Query() query: ProgramListQueryDto) {
+    return this.contentService.listPrograms(query);
+  }
 
-  @Put('programs/:id')
-  updateProgram(@Param('id') id: string, @Body() body: any) { return { message: `Update program ${id} — TODO` }; }
+  @Post("programs")
+  createProgram(
+    @CurrentUser() user: StaffUser,
+    @Body() body: CreateProgramDto,
+  ) {
+    return this.contentService.createProgram(user.userId, body);
+  }
 
-  @Post('programs/:id/submit-review')
-  submitReview(@Param('id') id: string) { return { message: `Submit for review ${id} — TODO` }; }
+  @Put("programs/:id")
+  updateProgram(
+    @CurrentUser() user: StaffUser,
+    @Param("id") id: string,
+    @Body() body: UpdateProgramDto,
+  ) {
+    return this.contentService.updateProgram(user.userId, id, body);
+  }
 
-  @Post('programs/:id/publish')
-  publish(@Param('id') id: string) { return { message: `Publish ${id} — TODO` }; }
+  @Post("programs/:id/submit-review")
+  submitReview(@CurrentUser() user: StaffUser, @Param("id") id: string) {
+    return this.contentService.submitReview(user.userId, id);
+  }
 
-  @Post('programs/:id/unpublish')
-  unpublish(@Param('id') id: string) { return { message: `Unpublish ${id} — TODO` }; }
+  @Post("programs/:id/publish")
+  @Roles(Role.ADMIN)
+  publish(@CurrentUser() user: StaffUser, @Param("id") id: string) {
+    return this.contentService.publish(user.userId, id);
+  }
 
-  // --- Videos ---
-  @Get('videos')
-  listVideos() { return { message: 'List videos — TODO' }; }
+  @Post("programs/:id/unpublish")
+  @Roles(Role.ADMIN)
+  unpublish(@CurrentUser() user: StaffUser, @Param("id") id: string) {
+    return this.contentService.unpublish(user.userId, id);
+  }
 
-  @Post('videos')
-  createVideo(@Body() body: any) { return { message: 'Create video (youtube_url + ai_description) — TODO' }; }
+  @Get("videos")
+  listVideos() {
+    return this.contentService.listVideos();
+  }
 
-  @Put('videos/:id')
-  updateVideo(@Param('id') id: string, @Body() body: any) { return { message: `Update video ${id} — TODO` }; }
+  @Post("videos")
+  createVideo(@CurrentUser() user: StaffUser, @Body() body: CreateVideoDto) {
+    return this.contentService.createVideo(user.userId, body);
+  }
 
-  @Post('videos/:id/recheck-link')
-  recheckLink(@Param('id') id: string) { return { message: `Recheck YouTube link ${id} — TODO` }; }
+  @Put("videos/:id")
+  updateVideo(
+    @CurrentUser() user: StaffUser,
+    @Param("id") id: string,
+    @Body() body: UpdateVideoDto,
+  ) {
+    return this.contentService.updateVideo(user.userId, id, body);
+  }
 
-  // --- Tags & Rules ---
-  @Get('tags')
-  listTags() { return { message: 'List tags — TODO' }; }
+  @Post("videos/:id/recheck-link")
+  recheckLink(@Param("id") id: string) {
+    return this.contentService.recheckLink(id);
+  }
 
-  @Post('rules')
-  createRule(@Body() body: any) { return { message: 'Create recommendation rule — TODO' }; }
+  @Get("tags")
+  listTags() {
+    return this.contentService.listTags();
+  }
 
-  @Get('review-logs')
-  reviewLogs() { return { message: 'Review logs — TODO' }; }
+  @Post("tags")
+  createTag(@Body() body: CreateTagDto) {
+    return this.contentService.createTag(body);
+  }
+
+  @Get("rules")
+  listRules() {
+    return this.contentService.listRules();
+  }
+
+  @Post("rules")
+  createRule(@Body() body: CreateRecommendationRuleDto) {
+    return this.contentService.createRule(body);
+  }
+
+  @Get("review-logs")
+  reviewLogs() {
+    return this.contentService.reviewLogs();
+  }
 }

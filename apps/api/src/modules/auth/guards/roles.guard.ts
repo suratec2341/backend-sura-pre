@@ -1,7 +1,12 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { Role } from '@blansole/shared';
-import { ROLES_KEY } from '../decorators/roles.decorator';
+import {
+  ForbiddenException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { Role } from "@blansole/shared";
+import { ROLES_KEY } from "../decorators/roles.decorator";
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -30,8 +35,18 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
-    // Allow ADMIN to bypass, or check if user has required role
-    return userRoles.includes(Role.ADMIN)
-      || requiredRoles.some((role) => userRoles.includes(role));
+    const authorized =
+      userRoles.includes(Role.ADMIN) ||
+      requiredRoles.some((role) => userRoles.includes(role));
+    if (!authorized) return false;
+
+    const isPrivileged =
+      userRoles.includes(Role.ADMIN) || userRoles.includes(Role.CONTENT_EDITOR);
+    if (isPrivileged && user.twoFactorVerified !== true) {
+      throw new ForbiddenException(
+        "Two-factor authentication is required for privileged access",
+      );
+    }
+    return true;
   }
 }

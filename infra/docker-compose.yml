@@ -40,6 +40,7 @@ services:
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-CHANGE_ME_DEV_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-CHANGE_ME_DEV_REFRESH_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-30d}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
@@ -128,6 +129,7 @@ services:
       RAG_MAX_COSINE_DISTANCE: ${RAG_MAX_COSINE_DISTANCE:-0.45}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-60}
       AI_WORKER_CONCURRENCY: ${AI_WORKER_CONCURRENCY:-2}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,6 +148,7 @@ services:
       REDIS_HOST: ${DOCKER_REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_URL: ${DOCKER_REDIS_URL:-redis://redis:6379}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
       FCM_CLIENT_EMAIL: ${FCM_CLIENT_EMAIL:-}
       FCM_PRIVATE_KEY: ${FCM_PRIVATE_KEY:-}
@@ -275,12 +278,12 @@ services:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
 

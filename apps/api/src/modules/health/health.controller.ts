@@ -1,16 +1,56 @@
-import { Controller, Get, Post, Delete, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from "@nestjs/common";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import {
+  ConnectHealthIntegrationDto,
+  SyncHealthIntegrationDto,
+} from "./dto/health.dto";
+import { HealthService } from "./health.service";
 
-@Controller('health-integrations')
+interface AuthenticatedUser {
+  userId: string;
+}
+
+@Controller("health-integrations")
 export class HealthController {
+  constructor(private readonly healthService: HealthService) {}
+
   @Get()
-  list() { return { message: 'List health integrations — TODO' }; }
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.healthService.list(user.userId);
+  }
 
-  @Post('connect')
-  connect() { return { message: 'Connect health integration — TODO' }; }
+  @Post("connect")
+  connect(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: ConnectHealthIntegrationDto,
+  ) {
+    return this.healthService.connect(user.userId, body);
+  }
 
-  @Post('sync')
-  sync() { return { message: 'Sync health data — TODO' }; }
+  @Post("sync")
+  @HttpCode(HttpStatus.ACCEPTED)
+  sync(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: SyncHealthIntegrationDto,
+  ) {
+    return this.healthService.sync(user.userId, body);
+  }
 
-  @Delete(':id')
-  disconnect(@Param('id') id: string) { return { message: `Disconnect ${id} — TODO` }; }
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async disconnect(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
+    await this.healthService.disconnect(user.userId, id);
+  }
 }
