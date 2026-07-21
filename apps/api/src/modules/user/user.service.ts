@@ -1,12 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '@blansole/shared';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "@blansole/shared";
 import {
   UpdateConsentDto,
   UpdateGoalDto,
   UpdateProfileDto,
   UpdateSettingsDto,
-} from './dto/user.dto';
+} from "./dto/user.dto";
 
 @Injectable()
 export class UserService {
@@ -14,20 +18,20 @@ export class UserService {
 
   async getMe(userId: string) {
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, status: { not: 'deleted' } },
+      where: { id: userId, status: { not: "deleted" } },
       select: {
         id: true,
         email: true,
         status: true,
         createdAt: true,
         profile: true,
-        healthNotes: { orderBy: { reportedAt: 'desc' }, take: 1 },
-        goals: { where: { status: 'active' }, orderBy: { startDate: 'desc' } },
+        healthNotes: { orderBy: { reportedAt: "desc" }, take: 1 },
+        goals: { where: { status: "active" }, orderBy: { startDate: "desc" } },
         settings: true,
-        consents: { orderBy: { grantedAt: 'desc' } },
+        consents: { orderBy: { grantedAt: "desc" } },
       },
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException("User not found");
 
     return {
       id: user.id,
@@ -59,6 +63,18 @@ export class UserService {
       if (healthData) {
         await tx.userHealthNote.create({ data: { userId, ...healthData } });
       }
+      const goalType = body.goal?.trim();
+      if (goalType) {
+        const existingGoal = await tx.userGoal.findFirst({
+          where: { userId, goalType, status: "active" },
+          select: { id: true },
+        });
+        if (!existingGoal) {
+          await tx.userGoal.create({
+            data: { userId, goalType, startDate: new Date() },
+          });
+        }
+      }
     });
 
     return this.getMe(userId);
@@ -71,8 +87,8 @@ export class UserService {
 
     const [items, metrics, sessions] = await Promise.all([
       this.prisma.userGoal.findMany({
-        where: { userId, status: 'active' },
-        orderBy: { startDate: 'desc' },
+        where: { userId, status: "active" },
+        orderBy: { startDate: "desc" },
       }),
       this.prisma.sessionMetric.aggregate({
         where: { session: { userId, startedAt: { gte: startOfToday } } },
@@ -98,12 +114,13 @@ export class UserService {
   async updateGoal(userId: string, body: UpdateGoalDto) {
     await this.assertUser(userId);
     const goalType = (body.goalType ?? body.goal)?.trim();
-    if (!goalType) throw new BadRequestException('goal or goalType is required');
+    if (!goalType)
+      throw new BadRequestException("goal or goalType is required");
     const targetValue = body.targetValue ?? body.targetSteps;
 
     const existing = await this.prisma.userGoal.findFirst({
-      where: { userId, goalType, status: 'active' },
-      orderBy: { startDate: 'desc' },
+      where: { userId, goalType, status: "active" },
+      orderBy: { startDate: "desc" },
     });
     const updateData = {
       targetValue,
@@ -112,7 +129,10 @@ export class UserService {
     };
 
     if (existing) {
-      return this.prisma.userGoal.update({ where: { id: existing.id }, data: updateData });
+      return this.prisma.userGoal.update({
+        where: { id: existing.id },
+        data: updateData,
+      });
     }
     return this.prisma.userGoal.create({
       data: {
@@ -146,14 +166,14 @@ export class UserService {
     await this.assertUser(userId);
     return this.prisma.userConsent.findMany({
       where: { userId },
-      orderBy: { grantedAt: 'desc' },
+      orderBy: { grantedAt: "desc" },
     });
   }
 
   async updateConsent(userId: string, type: string, body: UpdateConsentDto) {
     await this.assertUser(userId);
     const consentType = type.trim();
-    if (!consentType) throw new BadRequestException('Consent type is required');
+    if (!consentType) throw new BadRequestException("Consent type is required");
 
     return this.prisma.$transaction(async (tx) => {
       await tx.userConsent.updateMany({
@@ -173,7 +193,7 @@ export class UserService {
     await this.assertUser(userId);
     return this.prisma.userHealthNote.findMany({
       where: { userId },
-      orderBy: { reportedAt: 'desc' },
+      orderBy: { reportedAt: "desc" },
       take: 50,
     });
   }
@@ -181,7 +201,8 @@ export class UserService {
   async updateHealth(userId: string, body: UpdateProfileDto) {
     await this.assertUser(userId);
     const data = this.healthData(body);
-    if (!data) throw new BadRequestException('At least one health field is required');
+    if (!data)
+      throw new BadRequestException("At least one health field is required");
     return this.prisma.userHealthNote.create({ data: { userId, ...data } });
   }
 
@@ -189,7 +210,7 @@ export class UserService {
     await this.assertUser(userId);
     const rows = await this.prisma.riskAssessment.findMany({
       where: { userId, ...(scope ? { scope } : {}) },
-      orderBy: { computedAt: 'desc' },
+      orderBy: { computedAt: "desc" },
       take: 100,
     });
     const latest = new Map<string, (typeof rows)[number]>();
@@ -201,62 +222,75 @@ export class UserService {
 
   private async assertUser(userId: string) {
     const user = await this.prisma.user.findFirst({
-      where: { id: userId, status: { not: 'deleted' } },
+      where: { id: userId, status: { not: "deleted" } },
       select: { id: true },
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException("User not found");
   }
 
-  private profileData(body: UpdateProfileDto): Omit<Prisma.UserProfileUncheckedCreateInput, 'userId'> {
-    const data: Omit<Prisma.UserProfileUncheckedCreateInput, 'userId'> = {};
+  private profileData(
+    body: UpdateProfileDto,
+  ): Omit<Prisma.UserProfileUncheckedCreateInput, "userId"> {
+    const data: Omit<Prisma.UserProfileUncheckedCreateInput, "userId"> = {};
     if (body.name !== undefined) data.name = body.name.trim();
-    if (body.birthday !== undefined) data.birthday = this.parseBirthday(body.birthday);
+    const birthday = body.birthday ?? body.birthDate;
+    if (birthday !== undefined) data.birthday = this.parseBirthday(birthday);
     if (body.gender !== undefined) data.gender = body.gender;
     if (body.weight !== undefined) data.weightKg = body.weight;
     if (body.height !== undefined) data.heightCm = body.height;
-    if (body.activityLevel !== undefined) data.activityLevel = body.activityLevel;
-    if (body.exerciseFrequency !== undefined) data.exerciseFrequency = body.exerciseFrequency;
-    if (body.sedentaryHoursPerDay !== undefined) data.sedentaryHoursPerDay = body.sedentaryHoursPerDay;
+    if (body.activityLevel !== undefined)
+      data.activityLevel = body.activityLevel;
+    if (body.exerciseFrequency !== undefined)
+      data.exerciseFrequency = body.exerciseFrequency;
+    if (body.sedentaryHoursPerDay !== undefined)
+      data.sedentaryHoursPerDay = body.sedentaryHoursPerDay;
     if (body.shoeType !== undefined) data.primaryFootwear = body.shoeType;
     if (body.footSizeLeft !== undefined) data.footSizeLeft = body.footSizeLeft;
-    if (body.footSizeRight !== undefined) data.footSizeRight = body.footSizeRight;
+    if (body.footSizeRight !== undefined)
+      data.footSizeRight = body.footSizeRight;
     return data;
   }
 
-  private healthData(body: UpdateProfileDto): Omit<Prisma.UserHealthNoteUncheckedCreateInput, 'userId'> | null {
-    const hasHealth = body.conditions !== undefined
-      || body.injuryHistory !== undefined
-      || body.currentMedications !== undefined
-      || body.painLevel !== undefined
-      || body.painPoints !== undefined;
+  private healthData(
+    body: UpdateProfileDto,
+  ): Omit<Prisma.UserHealthNoteUncheckedCreateInput, "userId"> | null {
+    const hasHealth =
+      body.conditions !== undefined ||
+      body.injuryHistory !== undefined ||
+      body.currentMedications !== undefined ||
+      body.painLevel !== undefined ||
+      body.painPoints !== undefined;
     if (!hasHealth) return null;
 
     return {
-      conditionNote: body.conditions?.join(', '),
+      conditionNote: body.conditions?.join(", "),
       medicalConditions: body.conditions as Prisma.InputJsonValue | undefined,
       injuryHistory: body.injuryHistory,
-      currentMedications: body.currentMedications as Prisma.InputJsonValue | undefined,
-      painArea: body.painPoints?.join(', '),
+      currentMedications: body.currentMedications as
+        Prisma.InputJsonValue | undefined,
+      painArea: body.painPoints?.join(", "),
       painLevel: body.painLevel,
       painPoints: body.painPoints as Prisma.InputJsonValue | undefined,
     };
   }
 
-  private mapProfile(profile: {
-    userId: string;
-    name: string | null;
-    birthday: Date | null;
-    gender: string | null;
-    weightKg: number | null;
-    heightCm: number | null;
-    activityLevel: string | null;
-    exerciseFrequency: string | null;
-    sedentaryHoursPerDay: number | null;
-    primaryFootwear: string | null;
-    footSizeLeft: number | null;
-    footSizeRight: number | null;
-    updatedAt: Date;
-  } | null) {
+  private mapProfile(
+    profile: {
+      userId: string;
+      name: string | null;
+      birthday: Date | null;
+      gender: string | null;
+      weightKg: number | null;
+      heightCm: number | null;
+      activityLevel: string | null;
+      exerciseFrequency: string | null;
+      sedentaryHoursPerDay: number | null;
+      primaryFootwear: string | null;
+      footSizeLeft: number | null;
+      footSizeRight: number | null;
+      updatedAt: Date;
+    } | null,
+  ) {
     if (!profile) return null;
     return {
       ...profile,
@@ -269,26 +303,38 @@ export class UserService {
   }
 
   private parseBirthday(value: string) {
-    const parts = value.includes('-')
-      ? value.split('-').map(Number)
-      : value.split('/').map(Number).reverse();
+    const parts = value.includes("-")
+      ? value.split("-").map(Number)
+      : value.split("/").map(Number).reverse();
     const [year, month, day] = parts;
     const date = new Date(Date.UTC(year, month - 1, day));
-    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-      throw new BadRequestException('birthday is invalid');
+    if (
+      date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day
+    ) {
+      throw new BadRequestException("birthday is invalid");
     }
     const today = new Date();
-    const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const todayUtc = Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate(),
+    );
     if (date.getTime() > todayUtc || today.getUTCFullYear() - year > 150) {
-      throw new BadRequestException('birthday must be a valid date in the past');
+      throw new BadRequestException(
+        "birthday must be a valid date in the past",
+      );
     }
     return date;
   }
 
   private calculateAge(birthday: Date, today = new Date()) {
     let age = today.getUTCFullYear() - birthday.getUTCFullYear();
-    const birthdayHasPassed = today.getUTCMonth() > birthday.getUTCMonth()
-      || (today.getUTCMonth() === birthday.getUTCMonth() && today.getUTCDate() >= birthday.getUTCDate());
+    const birthdayHasPassed =
+      today.getUTCMonth() > birthday.getUTCMonth() ||
+      (today.getUTCMonth() === birthday.getUTCMonth() &&
+        today.getUTCDate() >= birthday.getUTCDate());
     if (!birthdayHasPassed) age -= 1;
     return Math.max(0, age);
   }

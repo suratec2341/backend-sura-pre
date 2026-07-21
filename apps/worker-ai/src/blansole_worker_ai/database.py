@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, MetaData, String, Table, Text, create_engine
 from sqlalchemy.orm import sessionmaker
 from pgvector.sqlalchemy import Vector
 
@@ -19,6 +19,63 @@ activity_sessions = Table(
     metadata,
     Column("id", String, primary_key=True),
     Column("user_id", String, nullable=False),
+    Column("activity_type", String, nullable=False),
+    Column("started_at", DateTime, nullable=False),
+    Column("duration_sec", Integer, nullable=True),
+    Column("status", String, nullable=False),
+)
+
+session_metrics = Table(
+    "session_metrics",
+    metadata,
+    Column("session_id", String, primary_key=True),
+    Column("steps", Integer, nullable=True),
+    Column("distance_km", Float, nullable=True),
+    Column("calories", Float, nullable=True),
+    Column("speed_kmh", Float, nullable=True),
+    Column("cadence", Float, nullable=True),
+    Column("walk_quality_score", Float, nullable=True),
+    Column("balance_score", Float, nullable=True),
+    Column("algorithm_version", String, nullable=False),
+)
+
+session_pressure_zones = Table(
+    "session_pressure_zones",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("session_id", String, nullable=False),
+    Column("foot_side", String, nullable=False),
+    Column("forefoot_percent", Float, nullable=False),
+    Column("midfoot_percent", Float, nullable=False),
+    Column("heel_percent", Float, nullable=False),
+    Column("hotspot_area", String, nullable=True),
+    Column("pressure_level", String, nullable=False),
+    Column("algorithm_version", String, nullable=False),
+)
+
+session_gait_metrics = Table(
+    "session_gait_metrics",
+    metadata,
+    Column("session_id", String, primary_key=True),
+    Column("cadence", Float, nullable=True),
+    Column("step_length", Float, nullable=True),
+    Column("gait_speed", Float, nullable=True),
+    Column("variability_cv", Float, nullable=True),
+    Column("gait_score", Float, nullable=True),
+    Column("algorithm_version", String, nullable=False),
+)
+
+risk_assessments = Table(
+    "risk_assessments",
+    metadata,
+    Column("id", String, primary_key=True),
+    Column("user_id", String, nullable=False),
+    Column("assessment_type", String, nullable=False),
+    Column("scope", String, nullable=False),
+    Column("source_session_id", String, nullable=True),
+    Column("score", Float, nullable=False),
+    Column("risk_level", String, nullable=False),
+    Column("algorithm_version", String, nullable=False),
 )
 
 ai_chat_threads = Table(

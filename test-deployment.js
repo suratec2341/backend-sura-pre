@@ -1,107 +1,108 @@
-const http = require('http');
-const net = require('net');
+const http = require("node:http");
+const https = require("node:https");
+const net = require("node:net");
 
 const COLORS = {
   reset: "\x1b[0m",
   green: "\x1b[32m",
   red: "\x1b[31m",
   yellow: "\x1b[33m",
-  cyan: "\x1b[36m"
+  cyan: "\x1b[36m",
 };
 
-function checkPort(host, port, serviceName) {
+function report(ok, message, optional = false) {
+  const color = ok ? COLORS.green : optional ? COLORS.yellow : COLORS.red;
+  const marker = ok ? "✔" : optional ? "!" : "✖";
+  console.log(`${color}${marker} ${message}${COLORS.reset}`);
+  return ok || optional;
+}
+
+function checkPort(host, port, serviceName, optional = true) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
-    let status = false;
-
-    socket.setTimeout(2000);
-    socket.on('connect', () => {
-      status = true;
+    let connected = false;
+    socket.setTimeout(2_000);
+    socket.on("connect", () => {
+      connected = true;
       socket.destroy();
     });
-    socket.on('timeout', () => {
-      socket.destroy();
-    });
-    socket.on('error', () => {
-      socket.destroy();
-    });
-    socket.on('close', () => {
-      if (status) {
-        console.log(`${COLORS.green}✔ ${serviceName} is UP (Port ${port})${COLORS.reset}`);
-      } else {
-        console.log(`${COLORS.red}✖ ${serviceName} is DOWN or unreachable on Port ${port}${COLORS.reset}`);
-      }
-      resolve(status);
-    });
-
+    socket.on("timeout", () => socket.destroy());
+    socket.on("error", () => socket.destroy());
+    socket.on("close", () =>
+      resolve(
+        report(
+          connected,
+          `${serviceName} ${connected ? "is reachable" : "is not reachable"} at ${host}:${port}`,
+          optional,
+        ),
+      ),
+    );
     socket.connect(port, host);
   });
 }
 
-function checkHttp(url, serviceName, method = 'GET', body = null) {
+function checkHttp(url, serviceName, expectedStatuses = [200]) {
   return new Promise((resolve) => {
-    const options = {
-      method: method,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    };
-
-    const req = http.request(url, options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 400) {
-          console.log(`${COLORS.green}✔ ${serviceName} is UP (${url}) - Status: ${res.statusCode}${COLORS.reset}`);
-          resolve(true);
-        } else {
-          console.log(`${COLORS.red}✖ ${serviceName} returned error status: ${res.statusCode} (${url})${COLORS.reset}`);
-          console.log(`  Response: ${data.substring(0, 200)}`);
-          resolve(false);
-        }
-      });
-    });
-
-    req.on('error', (err) => {
-      console.log(`${COLORS.red}✖ ${serviceName} is DOWN (${url}) - Error: ${err.message}${COLORS.reset}`);
-      resolve(false);
-    });
-
-    if (body) {
-      req.write(JSON.stringify(body));
-    }
+    const client = url.startsWith("https:") ? https : http;
+    const req = client.request(
+      url,
+      { method: "GET", timeout: 5_000 },
+      (res) => {
+        res.resume();
+        res.on("end", () =>
+          resolve(
+            report(
+              expectedStatuses.includes(res.statusCode),
+              `${serviceName}: HTTP ${res.statusCode} (${url})`,
+            ),
+          ),
+        );
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error("request timed out")));
+    req.on("error", (error) =>
+      resolve(report(false, `${serviceName}: ${error.message} (${url})`)),
+    );
     req.end();
   });
 }
 
 async function runTests() {
-  console.log(`${COLORS.cyan}===========================================${COLORS.reset}`);
-  console.log(`${COLORS.cyan}      Blansole Deployment Test Script      ${COLORS.reset}`);
-  console.log(`${COLORS.cyan}===========================================${COLORS.reset}\n`);
+  const apiBase = (
+    process.env.API_PUBLIC_URL || "http://localhost:8081/api/v1"
+  ).replace(/\/$/, "");
+  const apiOrigin = new URL(apiBase).origin;
+  const healthUrl = process.env.HEALTH_URL || `${apiOrigin}/healthz`;
+  const requireLocalInfra = process.env.REQUIRE_LOCAL_INFRA === "true";
 
-  console.log(`\n--- 1. Testing Infrastructure Ports ---`);
-  await checkPort('localhost', 5432, 'PostgreSQL Database');
-  await checkPort('localhost', 6379, 'Redis Cache/Broker');
-  await checkPort('localhost', 9000, 'MinIO Object Storage');
+  console.log(`${COLORS.cyan}Blansole deployment smoke test${COLORS.reset}`);
+  const checks = await Promise.all([
+    checkPort(
+      process.env.POSTGRES_HOST || "localhost",
+      Number(process.env.POSTGRES_HOST_PORT || 5432),
+      "PostgreSQL",
+      !requireLocalInfra,
+    ),
+    checkPort(
+      process.env.REDIS_HOST || "localhost",
+      Number(process.env.REDIS_HOST_PORT || 6379),
+      "Redis",
+      !requireLocalInfra,
+    ),
+    checkHttp(healthUrl, "API health"),
+    checkHttp(`${apiOrigin}/api/docs`, "Swagger UI"),
+    checkHttp(`${apiBase}/me`, "JWT guard rejects anonymous access", [401]),
+  ]);
 
-  console.log(`\n--- 2. Testing API Endpoints ---`);
-  // Assuming port 3000 mapped in docker-compose.yml or 8081 via nginx
-  await checkHttp('http://localhost:3000/api/v1/healthz', 'NestJS API Healthcheck');
-  await checkHttp('http://localhost:3000/api/docs', 'NestJS API Swagger UI');
-
-  console.log(`\n--- 3. Testing AI Worker Integration ---`);
-  await checkHttp('http://localhost:3000/api/v1/ai/chat', 'AI Chat Endpoint', 'POST', {
-    threadId: "test-thread-id",
-    message: "Test message from automated deployment script"
-  });
-
-  console.log(`\n--- 4. Testing Monitoring Systems ---`);
-  await checkHttp('http://localhost:3030/api/health', 'Grafana Dashboard');
-  await checkHttp('http://localhost:9090/-/healthy', 'Prometheus Server');
-
-  console.log(`\n${COLORS.cyan}===========================================${COLORS.reset}`);
-  console.log(`${COLORS.cyan}              Tests Completed              ${COLORS.reset}`);
-  console.log(`${COLORS.cyan}===========================================${COLORS.reset}\n`);
+  if (checks.every(Boolean)) {
+    console.log(`${COLORS.green}Deployment smoke test passed.${COLORS.reset}`);
+    return;
+  }
+  console.error(`${COLORS.red}Deployment smoke test failed.${COLORS.reset}`);
+  process.exitCode = 1;
 }
 
-runTests();
+runTests().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

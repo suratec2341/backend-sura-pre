@@ -1,20 +1,24 @@
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
-} from 'class-validator';
+} from "class-validator";
 
 export const RAG_DOCUMENT_CATEGORIES = [
-  'gait_knowledge',
-  'pressure_explain',
-  'guideline',
-  'faq',
-  'safety_rule',
+  "gait_knowledge",
+  "pressure_explain",
+  "guideline",
+  "faq",
+  "safety_rule",
 ] as const;
 
 export class SessionSummaryDto {
@@ -34,6 +38,30 @@ export class GenerateInsightDto {
   @IsString()
   @MaxLength(80)
   insightType?: string;
+}
+
+export class RecommendProgramDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  sessionId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @IsString({ each: true })
+  @MaxLength(80, { each: true })
+  conditionTags?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  severity?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  assign?: boolean;
 }
 
 export class CreateChatThreadDto {

@@ -1,14 +1,15 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService, Role } from '@blansole/shared';
-import { AiController } from './ai.controller';
-import { AiService } from './ai.service';
+import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { Test, TestingModule } from "@nestjs/testing";
+import { PrismaService, Role } from "@blansole/shared";
+import { AiController } from "./ai.controller";
+import { AiService } from "./ai.service";
+import { ProgramRecommendationService } from "./program-recommendation.service";
 
-jest.mock('../../utils/sanitizer.util', () => ({
+jest.mock("../../utils/sanitizer.util", () => ({
   sanitizeAiPrompt: jest.fn((input) => input),
 }));
 
-describe('AiController', () => {
+describe("AiController", () => {
   let controller: AiController;
   let aiService: {
     dispatchSessionSummaryTask: jest.Mock;
@@ -17,20 +18,21 @@ describe('AiController', () => {
     getTaskState: jest.Mock;
   };
   let prisma: any;
+  const programRecommendation = { recommend: jest.fn() };
 
-  const user = { userId: 'user-1', role: Role.USER };
+  const user = { userId: "user-1", role: Role.USER };
 
   beforeEach(async () => {
     aiService = {
-      dispatchSessionSummaryTask: jest.fn().mockResolvedValue('task-summary'),
-      dispatchChatMessageTask: jest.fn().mockResolvedValue('task-chat'),
-      dispatchEmbedDocumentTask: jest.fn().mockResolvedValue('task-embed'),
+      dispatchSessionSummaryTask: jest.fn().mockResolvedValue("task-summary"),
+      dispatchChatMessageTask: jest.fn().mockResolvedValue("task-chat"),
+      dispatchEmbedDocumentTask: jest.fn().mockResolvedValue("task-embed"),
       getTaskState: jest.fn(),
     };
 
     const transactionClient = {
       ragDocument: {
-        create: jest.fn().mockResolvedValue({ id: 'document-1' }),
+        create: jest.fn().mockResolvedValue({ id: "document-1" }),
       },
       ragChunk: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -53,87 +55,91 @@ describe('AiController', () => {
       providers: [
         { provide: AiService, useValue: aiService },
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: ProgramRecommendationService,
+          useValue: programRecommendation,
+        },
       ],
     }).compile();
 
     controller = module.get(AiController);
   });
 
-  it('is defined', () => {
+  it("is defined", () => {
     expect(controller).toBeDefined();
   });
 
-  it('queues a summary only for a session owned by the user', async () => {
-    prisma.activitySession.findFirst.mockResolvedValue({ id: 'session-1' });
+  it("queues a summary only for a session owned by the user", async () => {
+    prisma.activitySession.findFirst.mockResolvedValue({ id: "session-1" });
 
     await expect(
-      controller.sessionSummary(user, { sessionId: 'session-1' }),
+      controller.sessionSummary(user, { sessionId: "session-1" }),
     ).resolves.toEqual({
-      message: 'AI session summary task queued',
-      taskId: 'task-summary',
+      message: "AI session summary task queued",
+      taskId: "task-summary",
     });
     expect(prisma.activitySession.findFirst).toHaveBeenCalledWith({
-      where: { id: 'session-1', userId: 'user-1' },
+      where: { id: "session-1", userId: "user-1" },
       select: { id: true },
     });
   });
 
-  it('does not reveal a session owned by another user', async () => {
+  it("does not reveal a session owned by another user", async () => {
     prisma.activitySession.findFirst.mockResolvedValue(null);
 
     await expect(
-      controller.sessionSummary(user, { sessionId: 'other-session' }),
+      controller.sessionSummary(user, { sessionId: "other-session" }),
     ).rejects.toThrow(NotFoundException);
     expect(aiService.dispatchSessionSummaryTask).not.toHaveBeenCalled();
   });
 
-  it('queues chat only for an active thread owned by the user', async () => {
+  it("queues chat only for an active thread owned by the user", async () => {
     prisma.aiChatThread.findFirst.mockResolvedValue({
-      id: 'thread-1',
+      id: "thread-1",
       archivedAt: null,
     });
 
     await expect(
-      controller.chat(user, { threadId: 'thread-1', message: 'Hello' }),
+      controller.chat(user, { threadId: "thread-1", message: "Hello" }),
     ).resolves.toEqual({
-      message: 'AI chat task queued',
-      taskId: 'task-chat',
-      threadId: 'thread-1',
+      message: "AI chat task queued",
+      taskId: "task-chat",
+      threadId: "thread-1",
     });
     expect(aiService.dispatchChatMessageTask).toHaveBeenCalledWith(
-      'thread-1',
-      'Hello',
+      "thread-1",
+      "Hello",
     );
   });
 
-  it('rejects chat on an archived thread', async () => {
+  it("rejects chat on an archived thread", async () => {
     prisma.aiChatThread.findFirst.mockResolvedValue({
-      id: 'thread-1',
+      id: "thread-1",
       archivedAt: new Date(),
     });
 
     await expect(
-      controller.chat(user, { threadId: 'thread-1', message: 'Hello' }),
+      controller.chat(user, { threadId: "thread-1", message: "Hello" }),
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('creates a chat thread for the authenticated user', async () => {
-    prisma.aiChatThread.create.mockResolvedValue({ id: 'thread-1' });
+  it("creates a chat thread for the authenticated user", async () => {
+    prisma.aiChatThread.create.mockResolvedValue({ id: "thread-1" });
 
-    await controller.createThread(user, { title: '  My health chat  ' });
+    await controller.createThread(user, { title: "  My health chat  " });
 
     expect(prisma.aiChatThread.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { userId: 'user-1', title: 'My health chat' },
+        data: { userId: "user-1", title: "My health chat" },
       }),
     );
   });
 
-  it('creates bounded RAG chunks in one transaction before dispatch', async () => {
+  it("creates bounded RAG chunks in one transaction before dispatch", async () => {
     const result = await controller.ingestRagDocument({
-      title: 'Pressure guide',
-      category: 'guideline',
-      text: 'A'.repeat(8_500),
+      title: "Pressure guide",
+      category: "guideline",
+      text: "A".repeat(8_500),
     });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -142,27 +148,37 @@ describe('AiController', () => {
     });
     expect(prisma.transactionClient.ragChunk.createMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
-        expect.objectContaining({ documentId: 'document-1', chunkIndex: 0 }),
+        expect.objectContaining({ documentId: "document-1", chunkIndex: 0 }),
       ]),
     });
     expect(result).toEqual(
       expect.objectContaining({
-        documentId: 'document-1',
-        taskId: 'task-embed',
+        documentId: "document-1",
+        taskId: "task-embed",
       }),
     );
   });
 
-  it('does not expose a successful task from another thread', async () => {
-    prisma.aiChatThread.findFirst.mockResolvedValue({ id: 'thread-1' });
+  it("does not expose a successful task from another thread", async () => {
+    prisma.aiChatThread.findFirst.mockResolvedValue({ id: "thread-1" });
     aiService.getTaskState.mockResolvedValue({
-      taskId: 'task-1',
-      status: 'SUCCESS',
-      result: { threadId: 'thread-2' },
+      taskId: "task-1",
+      status: "SUCCESS",
+      result: { threadId: "thread-2" },
     });
 
     await expect(
-      controller.getChatTaskState(user, 'thread-1', 'task-1'),
+      controller.getChatTaskState(user, "thread-1", "task-1"),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it("delegates deterministic program matching with the authenticated user", async () => {
+    programRecommendation.recommend.mockResolvedValue({ matched: false });
+    await expect(
+      controller.recommendProgram(user, { conditionTags: ["heel pain"] }),
+    ).resolves.toEqual({ matched: false });
+    expect(programRecommendation.recommend).toHaveBeenCalledWith("user-1", {
+      conditionTags: ["heel pain"],
+    });
   });
 });

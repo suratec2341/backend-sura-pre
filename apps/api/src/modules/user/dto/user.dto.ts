@@ -1,4 +1,4 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform, Type } from "class-transformer";
 import {
   IsArray,
   IsBoolean,
@@ -13,7 +13,7 @@ import {
   MaxLength,
   Matches,
   Min,
-} from 'class-validator';
+} from "class-validator";
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -22,8 +22,23 @@ export class UpdateProfileDto {
   name?: string;
 
   @IsOptional()
+  @Transform(({ value }) => (value === "" ? undefined : value))
   @Matches(/^(?:\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})$/)
   birthday?: string;
+
+  /** Compatibility alias used by the current mobile onboarding form. */
+  @IsOptional()
+  @Transform(({ value }) => (value === "" ? undefined : value))
+  @Matches(/^(?:\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})$/)
+  birthDate?: string;
+
+  /** Accepted for mobile compatibility; birthday remains the source of truth. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(150)
+  age?: number;
 
   @IsOptional()
   @IsString()
@@ -66,6 +81,12 @@ export class UpdateProfileDto {
   @MaxLength(100)
   shoeType?: string;
 
+  /** Optional onboarding shortcut; persisted as an active user goal. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  goal?: string;
+
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
@@ -81,7 +102,7 @@ export class UpdateProfileDto {
   footSizeRight?: number;
 
   @IsOptional()
-  @Transform(({ value }) => typeof value === 'string' ? [value] : value)
+  @Transform(({ value }) => (typeof value === "string" ? [value] : value))
   @IsArray()
   @IsString({ each: true })
   conditions?: string[];
@@ -92,7 +113,7 @@ export class UpdateProfileDto {
   injuryHistory?: string;
 
   @IsOptional()
-  @Transform(({ value }) => typeof value === 'string' ? [value] : value)
+  @Transform(({ value }) => (typeof value === "string" ? [value] : value))
   @IsArray()
   @IsString({ each: true })
   currentMedications?: string[];
@@ -105,7 +126,7 @@ export class UpdateProfileDto {
   painLevel?: number;
 
   @IsOptional()
-  @Transform(({ value }) => typeof value === 'string' ? [value] : value)
+  @Transform(({ value }) => (typeof value === "string" ? [value] : value))
   @IsArray()
   @IsString({ each: true })
   painPoints?: string[];
@@ -154,11 +175,11 @@ export class UpdateSettingsDto {
   darkMode?: boolean;
 
   @IsOptional()
-  @IsIn(['metric', 'imperial'])
+  @IsIn(["metric", "imperial"])
   unitSystem?: string;
 
   @IsOptional()
-  @IsIn(['12h', '24h'])
+  @IsIn(["12h", "24h"])
   timeFormat?: string;
 
   @IsOptional()
@@ -179,6 +200,6 @@ export class UpdateConsentDto {
 
 export class RiskQueryDto {
   @IsOptional()
-  @IsIn(['single_session', 'rolling_7d', 'rolling_30d'])
+  @IsIn(["single_session", "rolling_7d", "rolling_30d"])
   scope?: string;
 }
