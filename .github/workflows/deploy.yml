@@ -6,10 +6,15 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     name: Build Images on GitHub
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -26,42 +31,88 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Docker images
+        shell: bash
         run: |
+          set -euo pipefail
+
           echo "Building images using GitHub servers..."
           docker compose -f infra/docker-compose.yml build
-          
+
           echo "Pushing images to GHCR sequentially to prevent freezing..."
           SERVICES=("api" "worker-session" "worker-ai" "worker-notification" "worker-health-sync" "worker-link-checker" "worker-episode-summary")
           for SERVICE in "${SERVICES[@]}"; do
             echo "Pushing $SERVICE..."
+            PUSHED=0
             for i in 1 2 3; do
-              docker push "ghcr.io/suratec2341/blansole-${SERVICE}:latest" && break || sleep 5
+              if docker push "ghcr.io/suratec2341/blansole-${SERVICE}:latest"; then
+                PUSHED=1
+                break
+              fi
+              echo "Push attempt $i failed for $SERVICE; retrying..."
+              sleep 5
             done
+
+            if [ "$PUSHED" -ne 1 ]; then
+              echo "Failed to push $SERVICE after 3 attempts."
+              exit 1
+            fi
           done
 
   deploy:
     name: Deploy on Private VM
     needs: build-and-push
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64, deploy]
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
+    env:
+      DEPLOY_DIR: /home/devuser/apps/backend-sura-pre
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Log in to the Container registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-        
-      - name: Pull and Deploy with Docker Compose
+      - name: Preflight Runner and Docker
+        shell: bash
         run: |
-          echo "Pulling pre-built images from GHCR..."
-          sudo docker compose -f infra/docker-compose.yml pull
-          
-          echo "Restarting services safely..."
-          sudo docker compose -f infra/docker-compose.yml up -d
-          
-          echo "Cleaning up dangling images..."
-          sudo docker image prune -f
-          echo "Deployment successful."
+          set -euo pipefail
+
+          test -d "$DEPLOY_DIR/.git"
+          test -f "$DEPLOY_DIR/.env"
+
+          if pgrep -af 'runc .* create'; then
+            echo "A container runtime create process is already stuck; refusing to deploy."
+            exit 1
+          fi
+
+          timeout -k 5s 20s sudo -n docker info >/dev/null
+
+      - name: Prepare Exact Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$DEPLOY_DIR"
+          git fetch --prune origin main
+          git checkout --detach "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Pull and Deploy Sequentially
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cleanup_registry_login() {
+            sudo -n docker logout ghcr.io >/dev/null 2>&1 || true
+          }
+          trap cleanup_registry_login EXIT
+
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | sudo -n docker login ghcr.io \
+                -u "${{ github.actor }}" \
+                --password-stdin
+
+          cd "$DEPLOY_DIR"
+          DOCKER_USE_SUDO=1 \
+          SKIP_GIT_UPDATE=1 \
+          RUN_MIGRATIONS=1 \
+          REQUIRE_EXISTING_DATA_VOLUME=1 \
+            sh scripts/deploy-hostinger.sh
